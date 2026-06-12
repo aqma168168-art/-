@@ -1,0 +1,78 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>員工作業系統 — 中央廚房</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.10.0/dist/tabler-icons.min.css">
+</head>
+<body>
+
+<div class="app">
+  <!-- ── Sidebar ─────────────────────────────────────── -->
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar__logo">
+      <div class="sidebar__logo-title">中央廚房系統</div>
+      <div class="sidebar__logo-sub">員工作業入口</div>
+      <span class="sidebar__portal-badge sidebar__portal-badge--staff">員工</span>
+    </div>
+
+    <div class="sidebar__section">
+      <div class="sidebar__section-label">每日作業</div>
+      <a class="sidebar__item is-active" data-page="dispatch" onclick="showPage('dispatch')">
+        <i class="ti ti-truck-delivery" aria-hidden="true"></i>
+        <span>中央廚房配發</span>
+      </a>
+      <a class="sidebar__item" data-page="stall-report" onclick="showPage('stall-report')">
+        <i class="ti ti-clipboard-text" aria-hidden="true"></i>
+        <span>攤位阿姨回報</span>
+      </a>
+      <a class="sidebar__item" data-page="inventory-report" onclick="showPage('inventory-report')">
+        <i class="ti ti-package" aria-hidden="true"></i>
+        <span>庫存回報</span>
+      </a>
+    </div>
+
+    <div class="sidebar__section">
+      <div class="sidebar__section-label">查詢</div>
+      <a class="sidebar__item" data-page="today-log" onclick="showPage('today-log')">
+        <i class="ti ti-calendar-event" aria-hidden="true"></i>
+        <span>今日作業紀錄</span>
+      </a>
+    </div>
+
+    <div class="sidebar__footer">
+      <button class="sidebar__logout" onclick="window.location.href='login.html'">
+        <i class="ti ti-logout" style="font-size:12px"></i> 切換身份
+      </button>
+    </div>
+  </nav>
+
+  <!-- ── Main ───────────────────────────────────────── -->
+  <div class="main">
+    <header class="topbar">
+      <h1 class="topbar__title" id="page-title">中央廚房配發</h1>
+      <div class="topbar__right">
+        <span class="topbar__date" id="topbar-date"></span>
+        <span class="badge badge--info" id="topbar-stall-badge" style="display:none"></span>
+      </div>
+    </header>
+
+    <div class="page-content" id="page-content">
+      <!-- 頁面內容由 staff.js 動態注入 -->
+      <div class="empty-state">
+        <i class="ti ti-loader" style="animation:spin .8s linear infinite"></i>
+        載入中…
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 共用 JS -->
+<script src="js/config.js"></script>
+<script src="js/api.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/staff.js"></script>
+</body>
+</html>

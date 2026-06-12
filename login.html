@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>登入 — 中央廚房管理系統</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.10.0/dist/tabler-icons.min.css">
+</head>
+<body class="login-page">
+
+<div class="login-card">
+  <div class="login-card__logo">中央廚房管理系統</div>
+  <p class="login-card__sub">請選擇您的使用身份</p>
+
+  <!-- 身份選擇 -->
+  <div class="login-card__portal-select">
+    <div class="portal-btn" id="btn-staff" onclick="selectPortal('staff')">
+      <i class="ti ti-users" aria-hidden="true"></i>
+      <span>員工作業</span>
+      <sub>廚房 / 攤位人員</sub>
+    </div>
+    <div class="portal-btn" id="btn-owner" onclick="selectPortal('owner')">
+      <i class="ti ti-chart-bar" aria-hidden="true"></i>
+      <span>老闆管理</span>
+      <sub>需要 PIN 驗證</sub>
+    </div>
+  </div>
+
+  <!-- 員工：直接進入 -->
+  <div id="section-staff" class="pin-section">
+    <button class="btn btn--primary btn--full btn--lg" onclick="enterStaff()">
+      <i class="ti ti-arrow-right" aria-hidden="true"></i>
+      進入員工作業系統
+    </button>
+    <p style="font-size:11px;color:var(--gray-400);text-align:center;margin-top:10px">
+      員工系統不顯示任何成本與損益資料
+    </p>
+  </div>
+
+  <!-- 老闆：需 PIN -->
+  <div id="section-owner" class="pin-section">
+    <div class="field" style="margin-bottom:12px">
+      <label for="pin-input">老闆 PIN（6 位數字）</label>
+      <input
+        type="password"
+        id="pin-input"
+        inputmode="numeric"
+        maxlength="6"
+        placeholder="••••••"
+        autocomplete="off"
+        onkeydown="if(event.key==='Enter') submitPin()"
+      >
+    </div>
+    <div id="pin-error" style="font-size:12px;color:var(--red-600);margin-bottom:10px;display:none">
+      PIN 錯誤，請重新輸入
+    </div>
+    <button class="btn btn--primary btn--full btn--lg" id="btn-login" onclick="submitPin()">
+      <i class="ti ti-lock-open" aria-hidden="true"></i>
+      驗證並進入
+    </button>
+    <p style="font-size:11px;color:var(--gray-400);text-align:center;margin-top:10px">
+      PIN 設定於 Google Sheets → Settings
+    </p>
+  </div>
+
+  <!-- 系統連線狀態 -->
+  <div id="conn-status" style="margin-top:20px;font-size:11px;color:var(--gray-400);text-align:center">
+    <span id="conn-dot">⬤</span> 正在檢查系統連線…
+  </div>
+</div>
+
+<script src="js/config.js"></script>
+<script src="js/api.js"></script>
+<script src="js/auth.js"></script>
+<script>
+  let selectedPortal = null;
+
+  // 若老闆已登入且重新回到 login，直接導向 owner
+  if (AUTH.isOwnerAuthed()) {
+    window.location.replace('owner.html');
+  }
+
+  // 顯示從哪裡被導回（redirect hint）
+  const urlParams = new URLSearchParams(window.location.search);
+  if (urlParams.get('redirect') === 'owner') {
+    selectPortal('owner');
+  }
+
+  function selectPortal(type) {
+    selectedPortal = type;
+    document.getElementById('btn-staff').classList.toggle('is-selected', type === 'staff');
+    document.getElementById('btn-owner').classList.toggle('is-selected', type === 'owner');
+
+    document.getElementById('section-staff').classList.toggle('is-visible', type === 'staff');
+    document.getElementById('section-owner').classList.toggle('is-visible', type === 'owner');
+
+    if (type === 'owner') {
+      setTimeout(() => document.getElementById('pin-input').focus(), 50);
+    }
+  }
+
+  function enterStaff() {
+    window.location.href = 'staff.html';
+  }
+
+  async function submitPin() {
+    const pin = document.getElementById('pin-input').value.trim();
+    const errEl = document.getElementById('pin-error');
+    const btn = document.getElementById('btn-login');
+
+    if (!pin || pin.length < 4) {
+      errEl.style.display = 'block';
+      errEl.textContent = '請輸入 PIN';
+      return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = '驗證中…';
+    errEl.style.display = 'none';
+
+    const ok = await AUTH.loginOwner(pin);
+
+    if (ok) {
+      window.location.href = 'owner.html';
+    } else {
+      errEl.style.display = 'block';
+      errEl.textContent = 'PIN 錯誤，請重新輸入';
+      document.getElementById('pin-input').value = '';
+      document.getElementById('pin-input').focus();
+      btn.disabled = false;
+      btn.innerHTML = '<i class="ti ti-lock-open"></i> 驗證並進入';
+    }
+  }
+
+  // 連線狀態檢查
+  (async () => {
+    const dot = document.getElementById('conn-dot');
+    const status = document.getElementById('conn-status');
+    try {
+      await API.getSettings();
+      dot.style.color = '#22c55e';
+      status.querySelector('span').nextSibling.textContent = ' 系統連線正常';
+    } catch {
+      dot.style.color = '#ef4444';
+      status.innerHTML = `<span style="color:#ef4444">⬤</span> 無法連線，請確認 Apps Script 網址設定（<code>js/config.js</code>）`;
+    }
+  })();
+</script>
+</body>
+</html>
