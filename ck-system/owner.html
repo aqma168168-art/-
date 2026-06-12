@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>老闆管理系統 — 中央廚房</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.10.0/dist/tabler-icons.min.css">
+</head>
+<body>
+
+<div class="app">
+  <!-- ── Sidebar ─────────────────────────────────────── -->
+  <nav class="sidebar" id="sidebar">
+    <div class="sidebar__logo">
+      <div class="sidebar__logo-title">中央廚房系統</div>
+      <div class="sidebar__logo-sub">老闆管理後台</div>
+      <span class="sidebar__portal-badge sidebar__portal-badge--owner">老闆</span>
+    </div>
+
+    <div class="sidebar__section">
+      <div class="sidebar__section-label">總覽</div>
+      <a class="sidebar__item is-active" data-page="dashboard" onclick="showPage('dashboard')">
+        <i class="ti ti-layout-dashboard" aria-hidden="true"></i>
+        <span>總儀表板</span>
+      </a>
+    </div>
+
+    <div class="sidebar__section">
+      <div class="sidebar__section-label">損益分析</div>
+      <a class="sidebar__item" data-page="kitchen-pl" onclick="showPage('kitchen-pl')">
+        <i class="ti ti-building-factory-2" aria-hidden="true"></i>
+        <span>中央廚房損益</span>
+      </a>
+      <a class="sidebar__item" data-page="stall-pl" onclick="showPage('stall-pl')">
+        <i class="ti ti-chart-bar" aria-hidden="true"></i>
+        <span>各攤位損益</span>
+      </a>
+      <a class="sidebar__item" data-page="monthly-report" onclick="showPage('monthly-report')">
+        <i class="ti ti-calendar-stats" aria-hidden="true"></i>
+        <span>月報表</span>
+      </a>
+    </div>
+
+    <div class="sidebar__section">
+      <div class="sidebar__section-label">庫存與成本</div>
+      <a class="sidebar__item" data-page="inventory" onclick="showPage('inventory')">
+        <i class="ti ti-package" aria-hidden="true"></i>
+        <span>庫存總覽</span>
+      </a>
+      <a class="sidebar__item" data-page="kitchen-costs" onclick="showPage('kitchen-costs')">
+        <i class="ti ti-receipt" aria-hidden="true"></i>
+        <span>成本管理</span>
+      </a>
+    </div>
+
+    <div class="sidebar__section">
+      <div class="sidebar__section-label">設定</div>
+      <a class="sidebar__item" data-page="settings-prices" onclick="showPage('settings-prices')">
+        <i class="ti ti-currency-dollar" aria-hidden="true"></i>
+        <span>供貨價格設定</span>
+      </a>
+      <a class="sidebar__item" data-page="settings-stalls" onclick="showPage('settings-stalls')">
+        <i class="ti ti-store" aria-hidden="true"></i>
+        <span>攤位設定</span>
+      </a>
+      <a class="sidebar__item" data-page="settings-ingredients" onclick="showPage('settings-ingredients')">
+        <i class="ti ti-salad" aria-hidden="true"></i>
+        <span>配料設定</span>
+      </a>
+    </div>
+
+    <div class="sidebar__footer">
+      <button class="sidebar__logout" onclick="AUTH.logoutOwner()">
+        <i class="ti ti-logout" style="font-size:12px"></i> 登出
+      </button>
+    </div>
+  </nav>
+
+  <!-- ── Main ───────────────────────────────────────── -->
+  <div class="main">
+    <header class="topbar">
+      <h1 class="topbar__title" id="page-title">總儀表板</h1>
+      <div class="topbar__right">
+        <span class="topbar__date" id="topbar-date"></span>
+        <span class="badge badge--warning" style="font-size:10px">老闆專用</span>
+      </div>
+    </header>
+
+    <div class="page-content" id="page-content">
+      <div class="empty-state">
+        <i class="ti ti-loader" style="animation:spin .8s linear infinite"></i>
+        載入中…
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 共用 JS：auth 守衛必須最先載入 -->
+<script src="js/config.js"></script>
+<script src="js/api.js"></script>
+<script src="js/auth.js"></script>
+<script>
+  // 第一道防線：未登入立即踢走
+  AUTH.requireOwner();
+  // 每次互動刷新 session
+  document.addEventListener('click', () => AUTH.refreshSession());
+</script>
+<script src="js/ui.js"></script>
+<script src="js/owner.js"></script>
+</body>
+</html>
