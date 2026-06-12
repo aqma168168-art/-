@@ -48,10 +48,10 @@ document.addEventListener('DOMContentLoaded', async () => {
       repSel.appendChild(opt);
     });
 
-    connBadge.textContent = '已連線';
+    connBadge.textContent = '已連線 ✓'; connBadge.classList.add('conn-badge--ok');
     connBadge.style.background = 'rgba(255,255,255,.25)';
   } catch(e) {
-    connBadge.textContent = '連線失敗';
+    connBadge.textContent = '連線失敗'; connBadge.classList.add('conn-badge--error');
     connBadge.style.background = 'rgba(239,68,68,.3)';
     UI.toast('無法連線，請確認網路', 'error', 6000);
   } finally { UI.hideLoading(); }

@@ -11,28 +11,8 @@
 </head>
 <body>
 
-<!-- ── PIN 驗證遮罩 ───────────────────────────────────────── -->
-<div id="pin-gate" class="pin-page">
-  <div class="pin-card">
-    <div class="pin-card__logo">中央廚房管理系統</div>
-    <p class="pin-card__sub">老闆管理後台 — 請輸入 PIN</p>
-    <input type="password" class="pin-input" id="pin-input"
-           inputmode="numeric" maxlength="6" placeholder="● ● ● ● ● ●"
-           autocomplete="off">
-    <p class="pin-error" id="pin-error">PIN 錯誤，請重新輸入</p>
-    <button class="btn btn--primary btn--full btn--lg" id="btn-pin-submit">
-      <i class="ti ti-lock-open"></i> 驗證並進入
-    </button>
-    <p style="font-size:11px;color:var(--ink-400);text-align:center;margin-top:14px">
-      <span class="conn-dot conn-dot--loading" id="conn-dot">⬤</span>
-      <span id="conn-msg"> 連線中…</span>
-    </p>
-  </div>
-</div>
-
-<!-- ── 主應用（驗證通過後顯示）──────────────────────────── -->
-<div id="app" class="app" style="display:none">
-  <nav class="sidebar">
+<div id="app" class="app">
+  <nav class="sidebar sidebar--owner">
     <div class="sidebar__brand">
       <div class="sidebar__brand-name">中央廚房系統</div>
       <div class="sidebar__brand-sub">老闆管理後台</div>
@@ -66,9 +46,6 @@
       <h1 class="topbar__title" id="page-title">今日總覽</h1>
       <div class="topbar__right">
         <span class="topbar__date" id="topbar-date"></span>
-        <button class="btn btn--sm btn--danger" onclick="AUTH.logoutOwner()">
-          <i class="ti ti-logout"></i> 登出
-        </button>
       </div>
     </header>
     <div class="page-body" id="page-body"></div>
@@ -80,7 +57,6 @@
 
 <script src="js/config.js"></script>
 <script src="js/api.js"></script>
-<script src="js/auth.js"></script>
 <script src="js/ui.js"></script>
 <script src="js/owner.js"></script>
 </body>

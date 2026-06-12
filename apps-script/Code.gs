@@ -18,26 +18,23 @@ const SHEETS = {
   PROFIT_SUMMARY:    '損益彙總'
 };
 
-// ── 角色定義 ─────────────────────────────────────────────────
-// OWNER_ONLY：只有帶有效 owner_token 的請求才能呼叫
-// STAFF：員工與老闆都可呼叫（員工不帶 token 也能用）
-// PUBLIC：任何人都可呼叫（verifyPin、讀取基本設定）
+// ── 角色定義（PIN 驗證暫時停用，全部設為 PUBLIC）────────────
 const ROUTE_ROLES = {
-  verifyPin:        'PUBLIC',   // 登入不需要 token
-  getSettings:      'PUBLIC',   // 前端初始化需要
-  getStalls:        'STAFF',    // 員工選攤位需要
-  getIngredients:   'STAFF',    // 員工填配料需要
-  getDispatches:    'STAFF',    // 員工查今日配發需要
-  saveDispatch:     'STAFF',    // 員工寫入配發
-  getReports:       'STAFF',    // 員工查今日回報需要
-  saveReport:       'STAFF',    // 員工寫入回報
-  saveInventoryLog: 'STAFF',    // 員工寫入庫存回報
-  getInventory:     'OWNER_ONLY',  // 庫存數字僅老闆可見
-  getKitchenCosts:  'OWNER_ONLY',
-  saveKitchenCost:  'OWNER_ONLY',
-  getStallCosts:    'OWNER_ONLY',
-  saveStallCost:    'OWNER_ONLY',
-  getProfitSummary: 'OWNER_ONLY',  // 損益、毛利、淨利 — 老闆專用
+  verifyPin:        'PUBLIC',
+  getSettings:      'PUBLIC',
+  getStalls:        'PUBLIC',
+  getIngredients:   'PUBLIC',
+  getDispatches:    'PUBLIC',
+  saveDispatch:     'PUBLIC',
+  getReports:       'PUBLIC',
+  saveReport:       'PUBLIC',
+  saveInventoryLog: 'PUBLIC',
+  getInventory:     'PUBLIC',
+  getKitchenCosts:  'PUBLIC',
+  saveKitchenCost:  'PUBLIC',
+  getStallCosts:    'PUBLIC',
+  saveStallCost:    'PUBLIC',
+  getProfitSummary: 'PUBLIC',
 };
 
 // ── CORS / 入口點 ────────────────────────────────────────────
@@ -48,9 +45,16 @@ function handleRequest(e) {
   const output = ContentService.createTextOutput();
   output.setMimeType(ContentService.MimeType.JSON);
   try {
-    const params   = e.parameter  || {};
-    const postData = e.postData   ? JSON.parse(e.postData.contents) : {};
-    const action   = params.action || postData.action;
+    const params = e.parameter || {};
+
+    // POST body 可能是 text/plain 或 application/json，都嘗試解析
+    let postData = {};
+    if (e.postData && e.postData.contents) {
+      try { postData = JSON.parse(e.postData.contents); } catch (_) {}
+    }
+
+    // action：優先從 body 取（避免 redirect 丟失 URL query），再從 URL 參數取
+    const action = postData.action || params.action;
 
     if (!action) {
       output.setContent(JSON.stringify({ success: false, error: '未指定 action' }));
@@ -58,8 +62,8 @@ function handleRequest(e) {
     }
 
     // ── 角色權限檢查 ─────────────────────────────────────────
-    const requiredRole = ROUTE_ROLES[action] || 'OWNER_ONLY'; // 未知 action 預設拒絕
-    const token        = params.owner_token || postData.owner_token || '';
+    const requiredRole = ROUTE_ROLES[action] || 'OWNER_ONLY';
+    const token = postData.owner_token || params.owner_token || '';
 
     if (requiredRole === 'OWNER_ONLY') {
       const check = checkOwnerToken(token);
@@ -72,7 +76,6 @@ function handleRequest(e) {
         return output;
       }
     }
-    // STAFF / PUBLIC：直接放行，不需要 token
 
     output.setContent(JSON.stringify(routeAction(action, params, postData)));
   } catch (err) {

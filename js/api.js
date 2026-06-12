@@ -9,54 +9,34 @@
 
 const API = (() => {
 
-  // ── 哪些 action 需要帶 owner_token ────────────────────────
-  const OWNER_ACTIONS = new Set([
-    'getInventory',
-    'getKitchenCosts',
-    'saveKitchenCost',
-    'getStallCosts',
-    'saveStallCost',
-    'getProfitSummary',
-  ]);
+  // ── 哪些 action 需要帶 owner_token（暫時停用，PIN 驗證關閉中）──
+  const OWNER_ACTIONS = new Set([]); // 暫時清空，所有 API 直接可用
 
   // ── 核心 fetch ────────────────────────────────────────────
   async function call(action, params = {}, body = null) {
     const url = new URL(CK_CONFIG.APPS_SCRIPT_URL);
     url.searchParams.set('action', action);
 
-    // 老闆專用 action → 帶 token 進 URL 參數（GET 與 POST 都帶）
-    if (OWNER_ACTIONS.has(action)) {
-      const token = typeof AUTH !== 'undefined' ? AUTH.getOwnerToken() : '';
-      if (token) url.searchParams.set('owner_token', token);
-    }
-
     Object.entries(params).forEach(([k, v]) => {
       if (v !== null && v !== undefined && v !== '') url.searchParams.set(k, v);
     });
 
-    const options = { method: body ? 'POST' : 'GET', redirect: 'follow' };
-
+    let options;
     if (body) {
-      // POST body 也一併帶 owner_token（雙保險）
       const payload = { action, ...body };
-      if (OWNER_ACTIONS.has(action)) {
-        const token = typeof AUTH !== 'undefined' ? AUTH.getOwnerToken() : '';
-        if (token) payload.owner_token = token;
-      }
-      options.headers = { 'Content-Type': 'application/json' };
-      options.body    = JSON.stringify(payload);
+      options = {
+        method: 'POST',
+        redirect: 'follow',
+        headers: { 'Content-Type': 'text/plain' },
+        body: JSON.stringify(payload),
+      };
+    } else {
+      options = { method: 'GET', redirect: 'follow' };
     }
 
     const res  = await fetch(url.toString(), options);
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
-
-    // 後端拒絕（UNAUTHORIZED）→ 導回登入頁
-    if (!data.success && data.code === 'UNAUTHORIZED') {
-      if (typeof AUTH !== 'undefined') AUTH.logoutOwner();
-      throw new Error('權限不足，請重新登入');
-    }
-
     if (!data.success) throw new Error(data.error || '伺服器回傳錯誤');
     return data;
   }

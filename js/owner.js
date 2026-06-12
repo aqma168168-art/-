@@ -13,49 +13,10 @@ const PAGE_TITLES = {
   inventory: '庫存總覽', costs: '成本管理', settings: '設定中心',
 };
 
-// ── 初始化（PIN 驗證 + App 啟動）────────────────────────────
+// ── 初始化（直接進入，無 PIN 驗證）─────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
-  // 日期顯示
   document.getElementById('topbar-date').textContent =
     new Date().toLocaleDateString('zh-TW', { year:'numeric', month:'long', day:'numeric', weekday:'short' });
-
-  // 連線測試
-  const connDot = document.getElementById('conn-dot');
-  const connMsg = document.getElementById('conn-msg');
-  try {
-    await API.getSettings();
-    connDot.className = 'conn-dot conn-dot--ok'; connMsg.textContent = ' 系統連線正常';
-  } catch {
-    connDot.className = 'conn-dot conn-dot--error'; connMsg.textContent = ' 無法連線，請確認 Apps Script URL';
-  }
-
-  // 若已有有效 session，直接進入
-  if (AUTH.isOwnerAuthed()) { enterApp(); return; }
-
-  // PIN 輸入
-  const input = document.getElementById('pin-input');
-  const btn   = document.getElementById('btn-pin-submit');
-  const err   = document.getElementById('pin-error');
-
-  btn.onclick = submitPin;
-  input.addEventListener('keydown', e => { if (e.key === 'Enter') submitPin(); });
-  input.focus();
-
-  async function submitPin() {
-    const pin = input.value.trim();
-    if (!pin) return;
-    UI.btnLoad(btn, true, '驗證中…');
-    err.classList.remove('show');
-    const ok = await AUTH.loginOwner(pin);
-    if (ok) { enterApp(); }
-    else { err.classList.add('show'); input.value = ''; input.focus(); UI.btnLoad(btn, false); }
-  }
-});
-
-async function enterApp() {
-  document.getElementById('pin-gate').style.display = 'none';
-  document.getElementById('app').style.display = 'flex';
-  document.addEventListener('click', () => AUTH.refreshSession());
 
   UI.showLoading('載入設定…');
   try {
@@ -63,15 +24,17 @@ async function enterApp() {
     OwnerApp.cache.settings    = sr.data;
     OwnerApp.cache.stalls      = stR.data;
     OwnerApp.cache.ingredients = ingR.data;
-  } catch (e) { UI.toast('載入設定失敗：' + e.message, 'error', 5000); }
-  finally { UI.hideLoading(); }
+  } catch (e) {
+    UI.toast('載入失敗，請確認 Apps Script URL：' + e.message, 'error', 8000);
+  } finally {
+    UI.hideLoading();
+  }
 
-  // Sidebar 路由
   document.querySelectorAll('.nav-item[data-page]').forEach(el =>
     el.addEventListener('click', () => showPage(el.dataset.page)));
 
   showPage('dashboard');
-}
+});
 
 function showPage(page) {
   OwnerApp.page = page;

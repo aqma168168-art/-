@@ -9,26 +9,24 @@
 <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.10.0/dist/tabler-icons.min.css">
 <link rel="stylesheet" href="css/style.css">
 </head>
-<body style="background:var(--ink-50)">
+<body style="background:var(--stall-bg)">
 
-<!-- 手機版單頁滾動 -->
 <div class="stall-page" id="stall-page">
 
-  <!-- 頂部導覽列 -->
+  <!-- 天藍頂列 -->
   <header class="stall-topbar">
     <div>
       <div class="stall-topbar__title">📋 攤位回報</div>
       <div class="stall-topbar__date" id="stall-date-display"></div>
     </div>
-    <span class="badge badge--sky" id="stall-conn-badge" style="background:rgba(255,255,255,.2);color:#fff;border:none">連線中</span>
+    <span class="conn-badge--stall" id="stall-conn-badge">連線中</span>
   </header>
 
-  <!-- 表單區 -->
   <form id="stall-form" novalidate>
 
     <!-- 基本資料 -->
     <div class="stall-section">
-      <div class="stall-section__head"><i class="ti ti-id-badge"></i>基本資料</div>
+      <div class="stall-section__head"><i class="ti ti-id-badge-2"></i>基本資料</div>
       <div class="stall-section__body">
         <div class="fg fg2" style="gap:12px">
           <div class="field field--stall">
@@ -51,11 +49,10 @@
       </div>
     </div>
 
-    <!-- 銷售回報 -->
+    <!-- 今日銷售 -->
     <div class="stall-section">
       <div class="stall-section__head"><i class="ti ti-cash-register"></i>今日銷售</div>
       <div class="stall-section__body">
-        <!-- 桶數 + 賣完時間 -->
         <div class="fg fg2" style="gap:12px;margin-bottom:16px">
           <div class="field field--stall">
             <label>今日桶數 <span style="color:var(--red-500)">*</span></label>
@@ -80,7 +77,7 @@
             </select>
           </div>
         </div>
-        <!-- 大碗 / 小碗 大字輸入 -->
+        <!-- 大碗 / 小碗 -->
         <div class="big-num-row">
           <div class="big-num-field">
             <label>大碗數 <span style="color:var(--red-500)">*</span></label>
@@ -94,34 +91,36 @@
       </div>
     </div>
 
-    <!-- 剩料回報 -->
+    <!-- 收攤剩料 -->
     <div class="stall-section">
       <div class="stall-section__head"><i class="ti ti-archive"></i>收攤剩料</div>
       <div class="stall-section__body">
-        <p style="font-size:12px;color:var(--ink-400);margin-bottom:12px">請確認後填入，若剩 0 請保持 0</p>
+        <p style="font-size:12px;color:var(--stall-accent-dark);opacity:.7;margin-bottom:14px;font-weight:500">
+          剩 0 請保持 0，收攤後立即填寫
+        </p>
 
-        <p style="font-size:12px;font-weight:700;color:var(--ink-600);margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px">底料</p>
-        <div class="rem-grid" style="margin-bottom:14px">
+        <p style="font-size:11px;font-weight:700;color:var(--stall-accent-dark);margin-bottom:8px;letter-spacing:.5px;text-transform:uppercase">底料</p>
+        <div class="rem-grid" style="margin-bottom:16px">
           <div class="rem-field"><label>大</label><select name="rem_base_L">__REM_OPTS__</select></div>
           <div class="rem-field"><label>中</label><select name="rem_base_M">__REM_OPTS__</select></div>
           <div class="rem-field"><label>小</label><select name="rem_base_S">__REM_OPTS__</select></div>
         </div>
 
-        <p style="font-size:12px;font-weight:700;color:var(--ink-600);margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px">米</p>
-        <div class="rem-grid" style="margin-bottom:14px">
+        <p style="font-size:11px;font-weight:700;color:var(--stall-accent-dark);margin-bottom:8px;letter-spacing:.5px;text-transform:uppercase">米</p>
+        <div class="rem-grid" style="margin-bottom:16px">
           <div class="rem-field"><label>大</label><select name="rem_rice_L">__REM_OPTS__</select></div>
           <div class="rem-field"><label>中</label><select name="rem_rice_M">__REM_OPTS__</select></div>
           <div class="rem-field"><label>小</label><select name="rem_rice_S">__REM_OPTS__</select></div>
         </div>
 
-        <p style="font-size:12px;font-weight:700;color:var(--ink-600);margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px">芋頭</p>
-        <div class="rem-grid" style="margin-bottom:14px">
+        <p style="font-size:11px;font-weight:700;color:var(--stall-accent-dark);margin-bottom:8px;letter-spacing:.5px;text-transform:uppercase">芋頭</p>
+        <div class="rem-grid" style="margin-bottom:16px">
           <div class="rem-field"><label>大</label><select name="rem_taro_L">__REM_OPTS__</select></div>
           <div class="rem-field"><label>中</label><select name="rem_taro_M">__REM_OPTS__</select></div>
           <div class="rem-field"><label>小</label><select name="rem_taro_S">__REM_OPTS__</select></div>
         </div>
 
-        <p style="font-size:12px;font-weight:700;color:var(--ink-600);margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px">其他配料</p>
+        <p style="font-size:11px;font-weight:700;color:var(--stall-accent-dark);margin-bottom:8px;letter-spacing:.5px;text-transform:uppercase">其他</p>
         <div class="rem-grid">
           <div class="rem-field"><label>芋泥(包)</label><select name="rem_taro_paste">__REM_OPTS__</select></div>
           <div class="rem-field"><label>碎皮蛋</label><select name="rem_broken_egg">__REM_OPTS__</select></div>
@@ -133,38 +132,38 @@
     </div>
 
     <!-- 異常備註 -->
-    <div class="stall-section">
-      <div class="stall-section__head"><i class="ti ti-message-dots"></i>異常備註</div>
+    <div class="stall-section" style="margin-bottom:0">
+      <div class="stall-section__head"><i class="ti ti-message-dots"></i>異常備註（選填）</div>
       <div class="stall-section__body">
-        <div class="fg" style="gap:10px">
+        <div class="fg" style="gap:12px">
           <div class="field field--stall">
-            <label>異常情況</label>
+            <label>異常類型</label>
             <select name="anomaly_type" id="s-anomaly">
-              <option value="">無異常</option>
-              <option value="提早賣完">提早賣完</option>
-              <option value="剩太多">剩太多</option>
-              <option value="太稠">底料太稠</option>
-              <option value="太稀">底料太稀</option>
-              <option value="客訴">客人反應異常</option>
-              <option value="其他">其他</option>
+              <option value="">無異常 ✓</option>
+              <option value="提早賣完">⚡ 提早賣完</option>
+              <option value="剩太多">📦 剩太多</option>
+              <option value="太稠">🍲 底料太稠</option>
+              <option value="太稀">💧 底料太稀</option>
+              <option value="客訴">💬 客人反應異常</option>
+              <option value="其他">📝 其他</option>
             </select>
           </div>
           <div class="field field--stall">
-            <label>備註說明</label>
-            <textarea name="note" id="s-note" rows="3" placeholder="例：今天天氣熱，賣特別快。客人反映湯頭略鹹…"></textarea>
+            <label>說明</label>
+            <textarea name="note" id="s-note" rows="3" placeholder="例：今天下雨人少，湯頭客人說偏鹹…"></textarea>
           </div>
         </div>
       </div>
     </div>
 
-  </form><!-- /stall-form -->
+  </form>
 
-  <!-- 送出完成畫面 -->
+  <!-- 完成畫面 -->
   <div class="stall-done" id="stall-done">
     <i class="ti ti-circle-check stall-done__icon"></i>
     <div class="stall-done__title">回報完成！</div>
     <div class="stall-done__sub" id="stall-done-detail"></div>
-    <button class="btn btn--sky btn--lg" onclick="resetStallForm()">
+    <button class="btn btn--stall btn--lg" onclick="resetStallForm()">
       <i class="ti ti-refresh"></i> 再填一份
     </button>
   </div>
@@ -172,13 +171,19 @@
 </div><!-- /stall-page -->
 
 <!-- 固定送出列 -->
-<div class="stall-submit-bar" id="submit-bar" style="max-width:540px;left:50%;transform:translateX(-50%)">
-  <button type="button" class="btn btn--sky btn--full btn--xl" id="btn-stall-submit">
+<div class="stall-submit-bar" id="submit-bar"
+     style="left:50%;transform:translateX(-50%);max-width:540px">
+  <button type="button" class="btn btn--stall btn--full btn--xl" id="btn-stall-submit">
     <i class="ti ti-send"></i> 送出今日回報
   </button>
 </div>
 
-<div class="loading-overlay" id="ck-loading"><div class="loading-box"><div class="loading-spinner"></div><p class="loading-msg">送出中…</p></div></div>
+<div class="loading-overlay" id="ck-loading">
+  <div class="loading-box">
+    <div class="loading-spinner" style="border-top-color:var(--stall-accent)"></div>
+    <p class="loading-msg">送出中…</p>
+  </div>
+</div>
 <div class="toast" id="ck-toast"></div>
 
 <script src="js/config.js"></script>

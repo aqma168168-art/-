@@ -78,8 +78,8 @@ async function renderDispatchList(el) {
       <div class="section-title"><i class="ti ti-truck-delivery"></i>配發記錄</div>
       <div style="display:flex;gap:8px">
         <input type="date" id="disp-date" value="${t()}" style="padding:7px 10px;border:1.5px solid var(--ink-200);border-radius:var(--r-md);font-size:13px;outline:none">
-        <button class="btn btn--sm btn--primary" onclick="loadDispatchList()"><i class="ti ti-refresh"></i> 更新</button>
-        <button class="btn btn--sm btn--green" onclick="showPage('new-dispatch')"><i class="ti ti-plus"></i> 新增</button>
+        <button class="btn btn--sm btn--kitchen" onclick="loadDispatchList()"><i class="ti ti-refresh"></i> 更新</button>
+        <button class="btn btn--sm btn--kitchen" onclick="showPage('new-dispatch')"><i class="ti ti-plus"></i> 新增</button>
       </div>
     </div>
     <div id="disp-list">${spinHTML()}</div>`;
@@ -94,7 +94,7 @@ async function loadDispatchList() {
     const res = await API.getDispatches(date);
     const rows = res.data || [];
     if (!rows.length) { c.innerHTML = `<div class="card">${noDataHTML()}</div>`; return; }
-    c.innerHTML = `<div class="card"><div class="table-wrap"><table>
+    c.innerHTML = `<div class="card card--kitchen"><div class="table-wrap table-wrap--kitchen"><table>
       <thead><tr>
         <th>攤位</th><th>配發人</th>
         <th>底料 大/中/小</th><th>米 大/中/小</th><th>芋頭 大/中/小</th>
@@ -182,7 +182,7 @@ function renderNewDispatch(el) {
 
         <div class="btn-row">
           <button type="button" class="btn" onclick="UI.resetForm(document.getElementById('dispatch-form'))"><i class="ti ti-eraser"></i>清除</button>
-          <button type="submit" class="btn btn--primary" id="btn-dispatch"><i class="ti ti-device-floppy"></i>儲存配發記錄</button>
+          <button type="submit" class="btn btn--kitchen" id="btn-dispatch"><i class="ti ti-device-floppy"></i>儲存配發記錄</button>
         </div>
       </form>
     </div>`;
@@ -219,7 +219,7 @@ async function renderLeftover(el) {
     const rows = res.data || [];
     const c = $('leftover-content');
     if (!rows.length) { c.innerHTML = `<div class="card">${noDataHTML()}</div>`; return; }
-    c.innerHTML = `<div class="card"><div class="table-wrap"><table>
+    c.innerHTML = `<div class="card card--kitchen"><div class="table-wrap table-wrap--kitchen"><table>
       <thead><tr>
         <th>攤位</th><th>底料 大/中/小</th><th>米 大/中/小</th><th>芋頭 大/中/小</th>
         <th>芋泥</th><th>碎皮蛋</th><th>整皮蛋</th><th>芹菜</th><th>菜脯</th>
@@ -319,7 +319,7 @@ async function renderInventory(el) {
               <div class="field"><label>數量</label><input type="number" name="qty" min="0.1" step="0.1" value="1"></div>
               <div class="field"><label>備註</label><input type="text" name="note" placeholder="例：早市採購"></div>
             </div>
-            <div class="btn-row"><button type="submit" class="btn btn--primary" id="btn-k-inv"><i class="ti ti-device-floppy"></i>儲存</button></div>
+            <div class="btn-row"><button type="submit" class="btn btn--kitchen" id="btn-k-inv"><i class="ti ti-device-floppy"></i>儲存</button></div>
           </form>
         </div>
       </div>
@@ -388,7 +388,7 @@ function renderCostInput(el) {
           <div class="field"><label>金額 ($)</label><input type="number" name="amount" min="0" value="0" required></div>
         </div>
         <div class="field" style="margin-bottom:14px"><label>備註說明</label><input type="text" name="note" placeholder="例：今日阿明加班費、早市買芋頭…"></div>
-        <div class="btn-row"><button type="submit" class="btn btn--primary" id="btn-cost"><i class="ti ti-device-floppy"></i>送出成本記錄</button></div>
+        <div class="btn-row"><button type="submit" class="btn btn--kitchen" id="btn-cost"><i class="ti ti-device-floppy"></i>送出成本記錄</button></div>
       </form>
     </div>
     <div id="cost-today-list" style="margin-top:20px"></div>`;
@@ -411,7 +411,7 @@ async function loadTodayCosts() {
     const res = await API.getKitchenCosts(t()); const rows = res.data||[];
     if(!rows.length){ c.innerHTML=''; return; }
     c.innerHTML = `<div class="section-title mb-16" style="margin-bottom:12px"><i class="ti ti-list"></i>今日已輸入成本</div>
-    <div class="card"><div class="table-wrap"><table>
+    <div class="card card--kitchen"><div class="table-wrap table-wrap--kitchen"><table>
       <thead><tr><th>類型</th><th>金額</th><th>備註</th></tr></thead>
       <tbody>${rows.map(r=>`<tr><td><span class="badge badge--gray">${r.type}</span></td><td class="td-num">${UI.fmtMoney(r.amount)}</td><td class="td-muted">${r.note||'—'}</td></tr>`).join('')}</tbody>
     </table></div></div>`;
