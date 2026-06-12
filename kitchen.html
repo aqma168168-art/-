@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>廚房作業系統 — 中央廚房</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Noto+Sans+TC:wght@400;500;600;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/icons-webfont@3.10.0/dist/tabler-icons.min.css">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body class="kitchen">
+
+<div class="app">
+  <nav class="sidebar">
+    <div class="sidebar__brand">
+      <div class="sidebar__brand-name">中央廚房系統</div>
+      <div class="sidebar__brand-sub">廚房作業入口</div>
+      <span class="sidebar__portal-tag sidebar__portal-tag--kitchen">
+        <i class="ti ti-chef-hat" style="font-size:10px"></i> 廚房
+      </span>
+    </div>
+    <nav class="sidebar__nav">
+      <div class="sidebar__section-label">每日作業</div>
+      <div class="nav-item active" data-page="dispatch"><i class="ti ti-truck-delivery"></i><span>今日配發</span></div>
+      <div class="nav-item" data-page="new-dispatch"><i class="ti ti-plus"></i><span>新增配發</span></div>
+
+      <div class="sidebar__section-label" style="margin-top:8px">參考資料</div>
+      <div class="nav-item" data-page="leftover"><i class="ti ti-history"></i><span>昨日剩料</span></div>
+      <div class="nav-item" data-page="suggestion"><i class="ti ti-bulb"></i><span>建議備料</span></div>
+
+      <div class="sidebar__section-label" style="margin-top:8px">庫存 &amp; 成本</div>
+      <div class="nav-item" data-page="inventory"><i class="ti ti-package"></i><span>庫存管理</span></div>
+      <div class="nav-item" data-page="cost-input"><i class="ti ti-receipt"></i><span>成本輸入</span></div>
+    </nav>
+    <div class="sidebar__footer">
+      <p class="sidebar__ver">v2.0.0</p>
+    </div>
+  </nav>
+
+  <div class="main">
+    <header class="topbar">
+      <h1 class="topbar__title" id="page-title">今日配發</h1>
+      <div class="topbar__right">
+        <span class="topbar__date" id="topbar-date"></span>
+        <span class="badge badge--violet" id="conn-badge">連線中…</span>
+      </div>
+    </header>
+    <div class="page-body" id="page-body"></div>
+  </div>
+</div>
+
+<div class="loading-overlay" id="ck-loading"><div class="loading-box"><div class="loading-spinner"></div><p class="loading-msg">載入中…</p></div></div>
+<div class="toast" id="ck-toast"></div>
+
+<script src="js/config.js"></script>
+<script src="js/api.js"></script>
+<script src="js/ui.js"></script>
+<script src="js/kitchen.js"></script>
+</body>
+</html>
