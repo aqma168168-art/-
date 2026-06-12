@@ -716,19 +716,42 @@ tbody tr:hover td { background:var(--ink-50); }
 }
 
 /* 大數字碗數輸入 */
-.big-num-row { display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px; }
-.big-num-field { display:flex; flex-direction:column; gap:6px; }
+.big-num-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 12px;
+  width: 100%;
+}
+.big-num-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;   /* 防止 grid 子項撐破欄位 */
+  width: 100%;
+}
 .big-num-field label { font-size:13px; font-weight:700; color:var(--stall-accent-dark); }
 .big-num-field input {
-  padding:14px 16px; font-size:28px; font-weight:700;
-  font-family:var(--font-num); border:2px solid var(--stall-card-border);
-  border-radius:var(--r-lg); text-align:center; color:var(--ink-950);
-  outline:none; transition:border-color .15s; -webkit-appearance:none;
+  display: block;
+  width: 100%;
+  min-width: 0;   /* 關鍵：讓 input 不超出 grid 欄位 */
+  padding: 14px 8px;
+  font-size: 28px;
+  font-weight: 700;
+  font-family: var(--font-num);
+  border: 2px solid var(--stall-card-border);
+  border-radius: var(--r-lg);
+  text-align: center;
+  color: var(--ink-950);
+  outline: none;
+  transition: border-color .15s;
+  -webkit-appearance: none;
   background: #FAFEFF;
+  box-sizing: border-box;
 }
 .big-num-field input:focus {
-  border-color:var(--stall-accent);
-  box-shadow:0 0 0 3px var(--stall-focus);
+  border-color: var(--stall-accent);
+  box-shadow: 0 0 0 3px var(--stall-focus);
   background: var(--white);
 }
 
