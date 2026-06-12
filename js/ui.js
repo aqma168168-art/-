@@ -1,150 +1,74 @@
 // ============================================================
-// ui.js — 共用 UI 工具（Toast、Loading、表單工具）
+// ui.js — 共用 UI 工具 v2.0
 // ============================================================
-
 const UI = (() => {
 
-  // ── Toast 通知 ─────────────────────────────────────────────
-  function toast(message, type = 'success', duration = 3000) {
-    const existing = document.getElementById('ck-toast');
-    if (existing) existing.remove();
-
+  // ── Toast ─────────────────────────────────────────────────
+  function toast(msg, type = 'success', ms = 3000) {
+    document.getElementById('ck-toast')?.remove();
     const el = document.createElement('div');
     el.id = 'ck-toast';
     el.className = `toast toast--${type}`;
-    el.innerHTML = `
-      <span class="toast__icon">${type === 'success' ? '✓' : type === 'error' ? '✕' : 'ℹ'}</span>
-      <span class="toast__msg">${message}</span>
-    `;
+    const icons = { success:'ti-circle-check', error:'ti-circle-x', info:'ti-info-circle' };
+    el.innerHTML = `<i class="ti ${icons[type]||'ti-info-circle'} toast__icon"></i><span>${msg}</span>`;
     document.body.appendChild(el);
-
-    // 進場
-    requestAnimationFrame(() => el.classList.add('toast--show'));
-
-    // 退場
-    setTimeout(() => {
-      el.classList.remove('toast--show');
-      setTimeout(() => el.remove(), 300);
-    }, duration);
+    requestAnimationFrame(() => el.classList.add('show'));
+    setTimeout(() => { el.classList.remove('show'); setTimeout(() => el.remove(), 300); }, ms);
   }
 
-  // ── 全頁 Loading ───────────────────────────────────────────
-  function showLoading(message = '載入中…') {
-    let mask = document.getElementById('ck-loading');
-    if (!mask) {
-      mask = document.createElement('div');
-      mask.id = 'ck-loading';
-      mask.className = 'loading-mask';
-      mask.innerHTML = `
-        <div class="loading-box">
-          <div class="loading-spinner"></div>
-          <p class="loading-msg"></p>
-        </div>
-      `;
-      document.body.appendChild(mask);
+  // ── Loading ───────────────────────────────────────────────
+  function showLoading(msg = '載入中…') {
+    let el = document.getElementById('ck-loading');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'ck-loading';
+      el.className = 'loading-overlay';
+      el.innerHTML = `<div class="loading-box"><div class="loading-spinner"></div><p class="loading-msg"></p></div>`;
+      document.body.appendChild(el);
     }
-    mask.querySelector('.loading-msg').textContent = message;
-    mask.style.display = 'flex';
+    el.querySelector('.loading-msg').textContent = msg;
+    el.classList.add('show');
   }
-
   function hideLoading() {
-    const mask = document.getElementById('ck-loading');
-    if (mask) mask.style.display = 'none';
+    document.getElementById('ck-loading')?.classList.remove('show');
   }
 
-  // ── 按鈕 Loading 狀態 ─────────────────────────────────────
-  function btnLoading(btn, loading, text = '處理中…') {
-    if (loading) {
-      btn.disabled = true;
-      btn._origText = btn.textContent;
-      btn.textContent = text;
-    } else {
-      btn.disabled = false;
-      btn.textContent = btn._origText || btn.textContent;
-    }
+  // ── Button state ──────────────────────────────────────────
+  function btnLoad(btn, loading, txt = '處理中…') {
+    if (loading) { btn._orig = btn.innerHTML; btn.disabled = true; btn.innerHTML = `<i class="ti ti-loader" style="animation:spin .7s linear infinite"></i>${txt}`; }
+    else         { btn.disabled = false; btn.innerHTML = btn._orig || btn.innerHTML; }
   }
 
-  // ── 表單工具 ──────────────────────────────────────────────
-  function getFormData(formEl) {
-    const data = {};
-    const elements = formEl.querySelectorAll('input, select, textarea');
-    elements.forEach(el => {
-      if (!el.name) return;
-      if (el.type === 'checkbox') data[el.name] = el.checked;
-      else if (el.type === 'number') data[el.name] = el.value === '' ? '' : Number(el.value);
-      else data[el.name] = el.value.trim();
+  // ── Form helpers ──────────────────────────────────────────
+  function formData(form) {
+    const d = {};
+    form.querySelectorAll('[name]').forEach(el => {
+      const v = el.value;
+      d[el.name] = el.type === 'number' ? (v === '' ? '' : Number(v)) : v.trim?.() ?? v;
     });
-    return data;
+    return d;
+  }
+  function resetForm(form) {
+    form.reset();
+    form.querySelectorAll('.field--error').forEach(f => f.classList.remove('field--error'));
+    form.querySelectorAll('.field__error').forEach(e => e.remove());
   }
 
-  function resetForm(formEl) {
-    formEl.reset();
-    // 清除自訂 error 狀態
-    formEl.querySelectorAll('.field--error').forEach(el => el.classList.remove('field--error'));
-    formEl.querySelectorAll('.field__error-msg').forEach(el => el.remove());
-  }
-
-  function setFieldError(fieldEl, message) {
-    fieldEl.classList.add('field--error');
-    let msg = fieldEl.querySelector('.field__error-msg');
-    if (!msg) {
-      msg = document.createElement('p');
-      msg.className = 'field__error-msg';
-      const input = fieldEl.querySelector('input, select, textarea');
-      if (input) input.after(msg);
-    }
-    msg.textContent = message;
-  }
-
-  function clearFieldErrors(formEl) {
-    formEl.querySelectorAll('.field--error').forEach(el => el.classList.remove('field--error'));
-    formEl.querySelectorAll('.field__error-msg').forEach(el => el.remove());
-  }
-
-  // ── 下拉選單動態產生 ──────────────────────────────────────
-  function populateSelect(selectEl, items, valueKey, labelKey, placeholder = '請選擇') {
-    selectEl.innerHTML = `<option value="">── ${placeholder} ──</option>`;
-    items.forEach(item => {
-      const opt = document.createElement('option');
-      opt.value = item[valueKey];
-      opt.textContent = item[labelKey];
-      selectEl.appendChild(opt);
-    });
-  }
-
-  // ── 日期工具 ──────────────────────────────────────────────
-  function todayISO() {
-    return new Date().toISOString().slice(0, 10);
-  }
-
-  function formatDate(isoStr) {
-    if (!isoStr) return '—';
-    const [y, m, d] = isoStr.split('-');
+  // ── Date ──────────────────────────────────────────────────
+  function todayISO() { return new Date().toISOString().slice(0, 10); }
+  function fmtDate(s) {
+    if (!s) return '—';
+    const [y,m,d] = String(s).split('-');
     return `${y}/${m}/${d}`;
   }
+  function monthISO() { return new Date().toISOString().slice(0, 7); }
 
-  function formatCurrency(num) {
-    return '$' + Number(num || 0).toLocaleString('zh-TW');
-  }
+  // ── Currency ──────────────────────────────────────────────
+  function fmtMoney(n) { return '$' + Number(n||0).toLocaleString('zh-TW'); }
+  function fmtNum(n)   { return Number(n||0).toLocaleString('zh-TW'); }
 
-  // ── 確認對話框（原生 confirm 替代） ─────────────────────
-  function confirm(message) {
-    return window.confirm(message);
-  }
+  // ── Color helpers ─────────────────────────────────────────
+  function moneyClass(n) { return Number(n) >= 0 ? 'c-green' : 'c-red'; }
 
-  return {
-    toast,
-    showLoading,
-    hideLoading,
-    btnLoading,
-    getFormData,
-    resetForm,
-    setFieldError,
-    clearFieldErrors,
-    populateSelect,
-    todayISO,
-    formatDate,
-    formatCurrency,
-    confirm,
-  };
+  return { toast, showLoading, hideLoading, btnLoad, formData, resetForm, todayISO, monthISO, fmtDate, fmtMoney, fmtNum, moneyClass };
 })();
