@@ -61,6 +61,14 @@ const API = (() => {
   async function saveStallCost(data)        { return call('saveStallCost', {}, data); }
   async function getProfitSummary(date)     { return call('getProfitSummary', { date }); }
 
+  // 週計畫
+  async function getWeeklyPlan(week, month) { return call('getWeeklyPlan', { week, month }); }
+  async function saveWeeklyPlanStatus(data)  { return call('saveWeeklyPlanStatus', {}, data); }
+
+  // 廚房報廢
+  async function getWasteLogs(date, month) { return call('getWasteLogs', { date, month }); }
+  async function saveWasteLog(data)         { return call('saveWasteLog', {}, data); }
+
   // 攤位阿姨表單選項（一次拿回所有選單設定）
   async function getStallFormOptions() { return call('getStallFormOptions'); }
 
@@ -73,6 +81,8 @@ const API = (() => {
     call,
     getOwnerDashboard,
     getStallFormOptions,
+    getWeeklyPlan, saveWeeklyPlanStatus,
+    getWasteLogs,  saveWasteLog,
     getSettings, getStalls, getIngredients,
     getDispatches, saveDispatch,
     getReports, saveReport,

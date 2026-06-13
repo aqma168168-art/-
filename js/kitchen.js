@@ -9,12 +9,15 @@ const KitchenApp = {
 };
 
 const K_TITLES = {
-  dispatch:    '今日配發表',
-  'new-dispatch': '新增配發',
-  leftover:    '昨日攤位剩料',
-  suggestion:  '建議備料',
-  inventory:   '庫存管理',
-  'cost-input':'成本輸入',
+  dispatch:      '今日配發表',
+  'new-dispatch':'新增配發',
+  leftover:      '昨日攤位剩料',
+  suggestion:    '建議備料',
+  'weekly-plan': '週計畫',
+  'monthly-cal': '月曆',
+  'waste-log':   '廚房報廢',
+  inventory:     '庫存管理',
+  'cost-input':  '成本輸入',
 };
 
 // ── 初始化 ────────────────────────────────────────────────────
@@ -53,6 +56,9 @@ function showPage(page) {
     'new-dispatch':renderNewDispatch,
     leftover:      renderLeftover,
     suggestion:    renderSuggestion,
+    'weekly-plan': renderWeeklyPlan,
+    'monthly-cal': renderMonthlyCal,
+    'waste-log':   renderWasteLog,
     inventory:     renderInventory,
     'cost-input':  renderCostInput,
   }[page] || (() => {}))(body);
@@ -417,3 +423,478 @@ async function loadTodayCosts() {
     </table></div></div>`;
   } catch(e) { c.innerHTML=errHTML(e); }
 }
+
+// ═══════════════════════════════════════════════════════════════
+// 週計畫
+// ═══════════════════════════════════════════════════════════════
+function getWeekDates(weekStr) {
+  // weekStr: 'yyyy-Www' 或空字串（本週）
+  if (!weekStr) {
+    const now = new Date();
+    const day = now.getDay() || 7;
+    now.setDate(now.getDate() - day + 1);
+    const dates = [];
+    for (let i = 0; i < 7; i++) {
+      const d = new Date(now); d.setDate(now.getDate() + i);
+      dates.push(d.toISOString().slice(0, 10));
+    }
+    return dates;
+  }
+  const [y, w] = weekStr.split('-W');
+  const jan1 = new Date(+y, 0, 1);
+  const days  = (+w - 1) * 7;
+  const start = new Date(jan1.getTime() + days * 86400000);
+  const dow   = start.getDay() || 7;
+  start.setDate(start.getDate() - dow + 1);
+  const dates = [];
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(start); d.setDate(start.getDate() + i);
+    dates.push(d.toISOString().slice(0, 10));
+  }
+  return dates;
+}
+
+function currentWeekStr() {
+  const now  = new Date();
+  const year = now.getFullYear();
+  const jan1 = new Date(year, 0, 1);
+  const week = Math.ceil((((now - jan1) / 86400000) + jan1.getDay() + 1) / 7);
+  return year + '-W' + String(week).padStart(2, '0');
+}
+
+async function renderWeeklyPlan(el) {
+  const weekStr = currentWeekStr();
+  el.innerHTML = `
+    <div class="section-header" style="margin-bottom:20px">
+      <div class="section-title"><i class="ti ti-calendar-week"></i>本週工作計畫</div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input type="week" id="week-input" value="${weekStr}"
+               style="padding:7px 10px;border:1.5px solid var(--kitchen-card-border);
+                      border-radius:var(--r-md);font-size:13px;outline:none;
+                      background:var(--white)">
+        <button class="btn btn--kitchen btn--sm" onclick="loadWeeklyPlan()">
+          <i class="ti ti-refresh"></i> 切換
+        </button>
+      </div>
+    </div>
+    <div id="weekly-content">${spinHTML()}</div>`;
+  loadWeeklyPlan();
+}
+
+window.loadWeeklyPlan = async function() {
+  const weekStr = $('week-input')?.value || currentWeekStr();
+  const c = $('weekly-content'); if (!c) return;
+  c.innerHTML = spinHTML();
+  try {
+    const res   = await API.getWeeklyPlan(weekStr, '');
+    const tasks = res.data || [];
+    const dates = getWeekDates(weekStr);
+    const dayNames = ['一','二','三','四','五','六','日'];
+    const priorityColor = { '高':'badge--red', '中':'badge--amber', '低':'badge--gray' };
+    const statusColor   = { '待完成':'badge--gray', '進行中':'badge--sky', '完成':'badge--green' };
+
+    const byDate = {};
+    dates.forEach(d => { byDate[d] = []; });
+    tasks.forEach(task => {
+      if (byDate[task.date]) byDate[task.date].push(task);
+    });
+
+    c.innerHTML = `
+      <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:8px">
+        ${dates.map((date, i) => {
+          const dayTasks = byDate[date] || [];
+          const isToday  = date === t();
+          return `
+            <div style="background:${isToday?'var(--kitchen-section-head)':'var(--white)'};
+                        border:${isToday?'2px solid var(--kitchen-sidebar-accent)':'1px solid var(--kitchen-card-border)'};
+                        border-radius:var(--r-lg);padding:10px;min-height:120px">
+              <div style="font-size:11px;font-weight:700;color:var(--amber-700);margin-bottom:2px;text-transform:uppercase">
+                週${dayNames[i]}
+              </div>
+              <div style="font-size:12px;color:var(--ink-500);margin-bottom:8px">${date.slice(5)}</div>
+              ${dayTasks.length === 0
+                ? `<div style="font-size:11px;color:var(--ink-300);text-align:center;padding:10px 0">—</div>`
+                : dayTasks.map(task => `
+                  <div style="background:var(--white);border:1px solid var(--kitchen-card-border);
+                              border-radius:var(--r-md);padding:8px;margin-bottom:6px;cursor:pointer"
+                       onclick="openTaskModal('${task.task_id}','${task.status}','${encodeURIComponent(task.note)}')">
+                    <div style="font-size:12px;font-weight:600;color:var(--ink-900);margin-bottom:4px;line-height:1.3">
+                      ${task.content}
+                    </div>
+                    <div style="display:flex;gap:4px;flex-wrap:wrap">
+                      <span class="badge ${priorityColor[task.priority]||'badge--gray'}" style="font-size:9px;padding:1px 5px">${task.priority}</span>
+                      <span class="badge ${statusColor[task.status]||'badge--gray'}" style="font-size:9px;padding:1px 5px">${task.status}</span>
+                    </div>
+                    ${task.assignee ? `<div style="font-size:10px;color:var(--ink-400);margin-top:3px">👤 ${task.assignee}</div>` : ''}
+                  </div>`).join('')}
+            </div>`;
+        }).join('')}
+      </div>
+
+      <!-- 任務清單（可勾選） -->
+      <div class="section-title" style="margin-top:24px;margin-bottom:12px">
+        <i class="ti ti-list-check"></i>本週任務清單
+      </div>
+      <div class="card card--kitchen">
+        ${tasks.length === 0 ? noDataHTML() : tasks.map(task => `
+          <div style="display:flex;align-items:flex-start;gap:12px;padding:12px 0;
+                      border-bottom:1px solid var(--kitchen-card-border)">
+            <div style="flex-shrink:0;margin-top:2px">
+              <input type="checkbox" id="ck-${task.task_id}"
+                     ${task.status==='完成'?'checked':''}
+                     onchange="updateTaskStatus('${task.task_id}',this.checked)"
+                     style="width:18px;height:18px;cursor:pointer;accent-color:var(--kitchen-sidebar-accent)">
+            </div>
+            <div style="flex:1;min-width:0">
+              <div style="font-size:14px;font-weight:600;color:var(--ink-900);
+                          ${task.status==='完成'?'text-decoration:line-through;color:var(--ink-400)':''}">
+                ${task.content}
+              </div>
+              <div style="display:flex;gap:6px;margin-top:4px;flex-wrap:wrap;align-items:center">
+                <span style="font-size:11px;color:var(--ink-400)">${task.date}</span>
+                <span class="badge badge--orange" style="font-size:9px">${task.type}</span>
+                ${task.assignee ? `<span style="font-size:11px;color:var(--ink-400)">👤 ${task.assignee}</span>` : ''}
+              </div>
+              ${task.note ? `<div style="font-size:12px;color:var(--ink-500);margin-top:4px;background:var(--kitchen-section-head);padding:4px 8px;border-radius:var(--r-sm)">✏️ ${task.note}</div>` : ''}
+            </div>
+            <div style="flex-shrink:0">
+              <span class="badge ${statusColor[task.status]||'badge--gray'}">${task.status}</span>
+            </div>
+          </div>`).join('')}
+      </div>`;
+
+    // 任務備註 Modal
+    c.innerHTML += `
+      <div id="task-modal" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,.5);
+           z-index:9999;align-items:center;justify-content:center;backdrop-filter:blur(2px)">
+        <div style="background:var(--white);border-radius:var(--r-xl);padding:28px;
+                    width:90%;max-width:420px;box-shadow:var(--shadow-lg)">
+          <div style="font-size:16px;font-weight:700;margin-bottom:16px">更新任務狀態</div>
+          <input type="hidden" id="modal-task-id">
+          <div class="field" style="margin-bottom:12px">
+            <label>狀態</label>
+            <select id="modal-status" style="padding:10px;border:1.5px solid var(--kitchen-card-border);border-radius:var(--r-md);font-size:14px">
+              <option value="待完成">待完成</option>
+              <option value="進行中">進行中</option>
+              <option value="完成">完成</option>
+            </select>
+          </div>
+          <div class="field" style="margin-bottom:16px">
+            <label>備註說明</label>
+            <textarea id="modal-note" rows="3" placeholder="說明進度或完成情況…"
+                      style="padding:10px;border:1.5px solid var(--kitchen-card-border);border-radius:var(--r-md);font-size:13px;width:100%;resize:vertical"></textarea>
+          </div>
+          <div style="display:flex;gap:8px;justify-content:flex-end">
+            <button class="btn btn--sm" onclick="closeTaskModal()">取消</button>
+            <button class="btn btn--kitchen btn--sm" id="btn-modal-save" onclick="saveTaskModal()">
+              <i class="ti ti-device-floppy"></i> 儲存
+            </button>
+          </div>
+        </div>
+      </div>`;
+  } catch(e) { c.innerHTML = errHTML(e); }
+};
+
+window.openTaskModal = function(taskId, status, noteEnc) {
+  $('modal-task-id').value = taskId;
+  $('modal-status').value  = status;
+  $('modal-note').value    = decodeURIComponent(noteEnc);
+  $('task-modal').style.display = 'flex';
+};
+window.closeTaskModal = function() {
+  $('task-modal').style.display = 'none';
+};
+window.saveTaskModal = async function() {
+  const btn = $('btn-modal-save');
+  UI.btnLoad(btn, true);
+  try {
+    await API.saveWeeklyPlanStatus({
+      task_id: $('modal-task-id').value,
+      status:  $('modal-status').value,
+      note:    $('modal-note').value,
+    });
+    UI.toast('✓ 任務已更新');
+    closeTaskModal();
+    loadWeeklyPlan();
+  } catch(e) { UI.toast(e.message, 'error'); }
+  finally { UI.btnLoad(btn, false); }
+};
+window.updateTaskStatus = async function(taskId, checked) {
+  try {
+    await API.saveWeeklyPlanStatus({
+      task_id: taskId,
+      status:  checked ? '完成' : '待完成',
+      note:    '',
+    });
+    UI.toast(checked ? '✓ 任務標記完成' : '任務重設為待完成');
+  } catch(e) { UI.toast(e.message, 'error'); }
+};
+
+// ═══════════════════════════════════════════════════════════════
+// 月曆
+// ═══════════════════════════════════════════════════════════════
+async function renderMonthlyCal(el) {
+  const month = UI.monthISO();
+  el.innerHTML = `
+    <div class="section-header" style="margin-bottom:20px">
+      <div class="section-title"><i class="ti ti-calendar-month"></i>月曆</div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input type="month" id="month-input" value="${month}"
+               style="padding:7px 10px;border:1.5px solid var(--kitchen-card-border);
+                      border-radius:var(--r-md);font-size:13px;outline:none;background:var(--white)">
+        <button class="btn btn--kitchen btn--sm" onclick="loadMonthlyCal()">
+          <i class="ti ti-refresh"></i> 切換
+        </button>
+      </div>
+    </div>
+    <div id="cal-content">${spinHTML()}</div>`;
+  loadMonthlyCal();
+}
+
+window.loadMonthlyCal = async function() {
+  const month = $('month-input')?.value || UI.monthISO();
+  const c = $('cal-content'); if (!c) return;
+  c.innerHTML = spinHTML();
+  try {
+    const res   = await API.getWeeklyPlan('', month);
+    const tasks = res.data || [];
+
+    const [y, m] = month.split('-').map(Number);
+    const firstDay = new Date(y, m-1, 1);
+    const lastDay  = new Date(y, m, 0);
+    const startDow = (firstDay.getDay() || 7) - 1; // 0=週一
+    const totalDays = lastDay.getDate();
+
+    // 按日期分組
+    const byDate = {};
+    tasks.forEach(task => {
+      const d = String(task.date);
+      if (!byDate[d]) byDate[d] = [];
+      byDate[d].push(task);
+    });
+
+    const dayNames = ['一','二','三','四','五','六','日'];
+    const today = t();
+    const statusColor = { '待完成':'#F59E0B','進行中':'#0EA5E9','完成':'#10B981' };
+
+    let cells = '';
+    // 前置空格
+    for (let i = 0; i < startDow; i++) {
+      cells += `<div style="min-height:90px"></div>`;
+    }
+    // 日期格子
+    for (let day = 1; day <= totalDays; day++) {
+      const dateStr  = `${month}-${String(day).padStart(2,'0')}`;
+      const dayTasks = byDate[dateStr] || [];
+      const isToday  = dateStr === today;
+      cells += `
+        <div style="min-height:90px;background:${isToday?'var(--kitchen-section-head)':'var(--white)'};
+                    border:${isToday?'2px solid var(--kitchen-sidebar-accent)':'1px solid var(--kitchen-card-border)'};
+                    border-radius:var(--r-md);padding:8px;overflow:hidden">
+          <div style="font-size:12px;font-weight:${isToday?'700':'500'};
+                      color:${isToday?'var(--kitchen-sidebar-accent)':'var(--ink-700)'};
+                      margin-bottom:4px">${day}</div>
+          ${dayTasks.slice(0, 3).map(task => `
+            <div style="font-size:10px;padding:2px 5px;border-radius:3px;margin-bottom:2px;
+                        background:${statusColor[task.status]||'#94A3B8'}20;
+                        color:${statusColor[task.status]||'#94A3B8'};
+                        font-weight:500;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;
+                        cursor:pointer"
+                 title="${task.content}"
+                 onclick="openTaskModal('${task.task_id}','${task.status}','${encodeURIComponent(task.note||'')}')">
+              ${task.content}
+            </div>`).join('')}
+          ${dayTasks.length > 3 ? `<div style="font-size:10px;color:var(--ink-400)">+${dayTasks.length-3} 項</div>` : ''}
+        </div>`;
+    }
+
+    c.innerHTML = `
+      <div style="background:var(--white);border:1px solid var(--kitchen-card-border);
+                  border-radius:var(--r-lg);overflow:hidden;box-shadow:var(--shadow-sm)">
+        <!-- 月份標題 -->
+        <div style="background:var(--kitchen-sidebar-bg);color:var(--white);
+                    padding:14px 20px;font-size:16px;font-weight:700;text-align:center">
+          ${y} 年 ${m} 月
+        </div>
+        <!-- 星期標頭 -->
+        <div style="display:grid;grid-template-columns:repeat(7,1fr);
+                    background:var(--kitchen-section-head);border-bottom:1px solid var(--kitchen-card-border)">
+          ${dayNames.map(d=>`<div style="text-align:center;padding:8px 4px;font-size:11px;
+                                font-weight:700;color:var(--amber-700)">${d}</div>`).join('')}
+        </div>
+        <!-- 日期格子 -->
+        <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;padding:8px">
+          ${cells}
+        </div>
+      </div>
+
+      <!-- 圖例 -->
+      <div style="display:flex;gap:16px;margin-top:12px;font-size:12px;color:var(--ink-500);
+                  align-items:center;flex-wrap:wrap">
+        <span style="font-weight:600">圖例：</span>
+        ${Object.entries(statusColor).map(([s,c])=>`
+          <span style="display:flex;align-items:center;gap:4px">
+            <span style="width:10px;height:10px;border-radius:2px;background:${c};display:inline-block"></span>
+            ${s}
+          </span>`).join('')}
+      </div>
+
+      <!-- 任務 Modal（共用週計畫的） -->
+      <div id="task-modal" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,.5);
+           z-index:9999;align-items:center;justify-content:center;backdrop-filter:blur(2px)">
+        <div style="background:var(--white);border-radius:var(--r-xl);padding:28px;
+                    width:90%;max-width:420px;box-shadow:var(--shadow-lg)">
+          <div style="font-size:16px;font-weight:700;margin-bottom:16px">更新任務狀態</div>
+          <input type="hidden" id="modal-task-id">
+          <div class="field" style="margin-bottom:12px">
+            <label>狀態</label>
+            <select id="modal-status" style="padding:10px;border:1.5px solid var(--kitchen-card-border);border-radius:var(--r-md);font-size:14px">
+              <option value="待完成">待完成</option>
+              <option value="進行中">進行中</option>
+              <option value="完成">完成</option>
+            </select>
+          </div>
+          <div class="field" style="margin-bottom:16px">
+            <label>備註</label>
+            <textarea id="modal-note" rows="3"
+                      style="padding:10px;border:1.5px solid var(--kitchen-card-border);border-radius:var(--r-md);font-size:13px;width:100%;resize:vertical"></textarea>
+          </div>
+          <div style="display:flex;gap:8px;justify-content:flex-end">
+            <button class="btn btn--sm" onclick="closeTaskModal()">取消</button>
+            <button class="btn btn--kitchen btn--sm" id="btn-modal-save" onclick="saveTaskModal()">
+              <i class="ti ti-device-floppy"></i> 儲存
+            </button>
+          </div>
+        </div>
+      </div>`;
+  } catch(e) { c.innerHTML = errHTML(e); }
+};
+
+// ═══════════════════════════════════════════════════════════════
+// 廚房報廢記錄
+// ═══════════════════════════════════════════════════════════════
+async function renderWasteLog(el) {
+  const ings = (KitchenApp.cache.ingredients||[]).filter(i =>
+    String(i.in_inventory).toUpperCase() === 'TRUE');
+
+  el.innerHTML = `
+    <div class="section-title" style="margin-bottom:16px"><i class="ti ti-trash"></i>新增報廢記錄</div>
+    <div class="card card--kitchen" style="margin-bottom:24px">
+      <div class="alert-row alert-row--warning" style="margin-bottom:16px">
+        <i class="ti ti-info-circle alert-row__icon"></i>
+        <div class="alert-row__body">
+          <strong>報廢會自動扣除庫存</strong>
+          <span>填寫後系統會同時在庫存異動表記錄出庫（耗損）</span>
+        </div>
+      </div>
+      <form id="waste-form" novalidate>
+        <div class="fg fg3" style="margin-bottom:12px">
+          <div class="field"><label>日期</label>
+            <input type="date" name="date" value="${t()}">
+          </div>
+          <div class="field"><label>品項 *</label>
+            <select name="item_id" id="waste-item">
+              <option value="">請選擇…</option>
+              ${ings.map(i=>`<option value="${i.ingredient_id}"
+                data-name="${i.ingredient_name}" data-unit="${i.unit}">
+                ${i.ingredient_name}（${i.unit}）</option>`).join('')}
+            </select>
+          </div>
+          <div class="field"><label>數量 *</label>
+            <input type="number" name="qty" min="0.1" step="0.1" value="1">
+          </div>
+        </div>
+        <div class="fg fg3" style="margin-bottom:12px">
+          <div class="field"><label>報廢原因 *</label>
+            <select name="reason">
+              <option value="expired">過期</option>
+              <option value="spoiled">變質</option>
+              <option value="accident">操作失誤</option>
+              <option value="overstock">備料過多</option>
+              <option value="other">其他</option>
+            </select>
+          </div>
+          <div class="field"><label>記錄人</label>
+            <select name="recorder">
+              ${(KitchenApp.cache.settings?.['配發人清單']||'阿明,阿華,阿成').split(',')
+                .map(n=>`<option value="${n.trim()}">${n.trim()}</option>`).join('')}
+            </select>
+          </div>
+          <div class="field"><label>備註說明</label>
+            <input type="text" name="note" placeholder="選填">
+          </div>
+        </div>
+        <div class="btn-row">
+          <button type="submit" class="btn btn--kitchen" id="btn-waste">
+            <i class="ti ti-trash"></i> 新增報廢記錄
+          </button>
+        </div>
+      </form>
+    </div>
+
+    <div class="section-header" style="margin-bottom:12px">
+      <div class="section-title"><i class="ti ti-history"></i>報廢記錄</div>
+      <div style="display:flex;gap:8px">
+        <input type="date" id="waste-date" value="${t()}"
+               style="padding:6px 10px;border:1.5px solid var(--kitchen-card-border);
+                      border-radius:var(--r-md);font-size:13px;outline:none;background:var(--white)">
+        <button class="btn btn--sm btn--kitchen" onclick="loadWasteLogs()">
+          <i class="ti ti-refresh"></i> 查詢
+        </button>
+      </div>
+    </div>
+    <div class="card card--kitchen" id="waste-list">${spinHTML()}</div>`;
+
+  // 品項選擇時帶入名稱和單位
+  $('waste-item')?.addEventListener('change', function() {
+    const opt = this.selectedOptions[0];
+    $('waste-form').querySelector('[name="item_id"]').dataset.name = opt?.dataset?.name || '';
+    $('waste-form').querySelector('[name="item_id"]').dataset.unit = opt?.dataset?.unit || '';
+  });
+
+  $('waste-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const data = UI.formData(e.target);
+    if (!data.item_id) { UI.toast('請選擇品項', 'error'); return; }
+    const opt = $('waste-item').selectedOptions[0];
+    data.item_name = opt?.dataset?.name || '';
+    data.unit      = opt?.dataset?.unit || '';
+    const btn = $('btn-waste');
+    UI.btnLoad(btn, true);
+    try {
+      await API.saveWasteLog(data);
+      UI.toast('✓ 報廢記錄已新增，庫存已扣除');
+      UI.resetForm(e.target);
+      e.target.querySelector('[name="date"]').value = t();
+      loadWasteLogs();
+    } catch(err) { UI.toast(err.message, 'error'); }
+    finally { UI.btnLoad(btn, false); }
+  });
+
+  loadWasteLogs();
+}
+
+window.loadWasteLogs = async function() {
+  const date = $('waste-date')?.value || t();
+  const c = $('waste-list'); if (!c) return;
+  c.innerHTML = spinHTML();
+  try {
+    const res  = await API.getWasteLogs(date, '');
+    const rows = res.data || [];
+    if (!rows.length) { c.innerHTML = noDataHTML(); return; }
+    c.innerHTML = `<div class="table-wrap table-wrap--kitchen"><table>
+      <thead><tr><th>日期</th><th>品項</th><th>數量</th><th>報廢原因</th><th>記錄人</th><th>備註</th></tr></thead>
+      <tbody>${rows.map(r=>`<tr>
+        <td>${r.date}</td>
+        <td><strong>${r.item_name}</strong></td>
+        <td class="td-num">${r.qty} ${r.unit}</td>
+        <td><span class="badge badge--red">${r.reason}</span></td>
+        <td>${r.recorder||'—'}</td>
+        <td class="td-muted">${r.note||'—'}</td>
+      </tr>`).join('')}</tbody>
+    </table></div>
+    <div style="padding:10px 14px;font-size:12px;color:var(--ink-500);border-top:1px solid var(--kitchen-card-border)">
+      共 ${rows.length} 筆報廢記錄
+    </div>`;
+  } catch(e) { c.innerHTML = errHTML(e); }
+};
