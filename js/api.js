@@ -61,8 +61,18 @@ const API = (() => {
   async function saveStallCost(data)        { return call('saveStallCost', {}, data); }
   async function getProfitSummary(date)     { return call('getProfitSummary', { date }); }
 
+  // 攤位阿姨表單選項（一次拿回所有選單設定）
+  async function getStallFormOptions() { return call('getStallFormOptions'); }
+
+  // OWNER — 一次拿完所有資料
+  async function getOwnerDashboard(date) {
+    return call('getOwnerDashboard', { date });
+  }
+
   return {
     call,
+    getOwnerDashboard,
+    getStallFormOptions,
     getSettings, getStalls, getIngredients,
     getDispatches, saveDispatch,
     getReports, saveReport,
