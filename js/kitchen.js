@@ -1,6 +1,5 @@
 // ============================================================
-// kitchen.js — 廚房作業系統 v2.0
-// 不顯示任何毛利、淨利、成本分析數字
+// kitchen.js — 廚房作業系統 v2.1
 // ============================================================
 
 const KitchenApp = {
@@ -27,7 +26,9 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   UI.showLoading('載入設定…');
   try {
-    const [sr, stR, ingR] = await Promise.all([API.getSettings(), API.getStalls(), API.getIngredients()]);
+    const [sr, stR, ingR] = await Promise.all([
+      API.getSettings(), API.getStalls(), API.getIngredients()
+    ]);
     KitchenApp.cache.settings    = sr.data;
     KitchenApp.cache.stalls      = stR.data;
     KitchenApp.cache.ingredients = ingR.data;
@@ -45,25 +46,31 @@ document.addEventListener('DOMContentLoaded', async () => {
   showPage('dispatch');
 });
 
+// ── 路由（同步包裝 async 函式，確保 el 正確傳入）────────────
 function showPage(page) {
   KitchenApp.page = page;
-  document.querySelectorAll('.nav-item').forEach(el => el.classList.toggle('active', el.dataset.page === page));
+  document.querySelectorAll('.nav-item').forEach(el =>
+    el.classList.toggle('active', el.dataset.page === page));
   document.getElementById('page-title').textContent = K_TITLES[page] || page;
   const body = document.getElementById('page-body');
   body.innerHTML = '';
-  ({
-    dispatch:      renderDispatchList,
-    'new-dispatch':renderNewDispatch,
-    leftover:      renderLeftover,
-    suggestion:    renderSuggestion,
-    'weekly-plan': renderWeeklyPlan,
-    'monthly-cal': renderMonthlyCal,
-    'waste-log':   renderWasteLog,
-    inventory:     renderInventory,
-    'cost-input':  renderCostInput,
-  }[page] || (() => {}))(body);
+
+  const pages = {
+    dispatch:      () => renderDispatchList(body),
+    'new-dispatch':() => renderNewDispatch(body),
+    leftover:      () => renderLeftover(body),
+    suggestion:    () => renderSuggestion(body),
+    'weekly-plan': () => renderWeeklyPlan(body),
+    'monthly-cal': () => renderMonthlyCal(body),
+    'waste-log':   () => renderWasteLog(body),
+    inventory:     () => renderInventory(body),
+    'cost-input':  () => renderCostInput(body),
+  };
+  const fn = pages[page];
+  if (fn) fn();
 }
 
+// ── 工具 ─────────────────────────────────────────────────────
 const $ = id => document.getElementById(id);
 const t = UI.todayISO;
 const fn = UI.fmtNum;
@@ -71,43 +78,47 @@ const fn = UI.fmtNum;
 function yesterday() {
   const d = new Date(); d.setDate(d.getDate()-1); return d.toISOString().slice(0,10);
 }
-function spinHTML() { return '<div class="empty"><i class="ti ti-loader" style="animation:spin .7s linear infinite"></i><p>載入中…</p></div>'; }
+function spinHTML()   { return '<div class="empty"><i class="ti ti-loader" style="animation:spin .7s linear infinite"></i><p>載入中…</p></div>'; }
 function noDataHTML() { return '<div class="empty" style="padding:24px"><i class="ti ti-inbox"></i><p>無資料</p></div>'; }
-function errHTML(e) { return `<div class="alert-row alert-row--danger" style="margin:0"><i class="ti ti-alert-triangle alert-row__icon"></i><div class="alert-row__body"><strong>載入失敗</strong><span>${e.message}</span></div></div>`; }
+function errHTML(e)   { return `<div class="alert-row alert-row--danger" style="margin:0"><i class="ti ti-alert-triangle alert-row__icon"></i><div class="alert-row__body"><strong>載入失敗</strong><span>${e.message}</span></div></div>`; }
 
 // ═══════════════════════════════════════════════════════════════
 // 今日配發表
 // ═══════════════════════════════════════════════════════════════
-async function renderDispatchList(el) {
+function renderDispatchList(el) {
   el.innerHTML = `
     <div class="section-header" style="margin-bottom:16px">
       <div class="section-title"><i class="ti ti-truck-delivery"></i>配發記錄</div>
       <div style="display:flex;gap:8px">
-        <input type="date" id="disp-date" value="${t()}" style="padding:7px 10px;border:1.5px solid var(--ink-200);border-radius:var(--r-md);font-size:13px;outline:none">
-        <button class="btn btn--sm btn--kitchen" onclick="loadDispatchList()"><i class="ti ti-refresh"></i> 更新</button>
-        <button class="btn btn--sm btn--kitchen" onclick="showPage('new-dispatch')"><i class="ti ti-plus"></i> 新增</button>
+        <input type="date" id="disp-date" value="${t()}"
+               style="padding:7px 10px;border:1.5px solid var(--ink-200);border-radius:var(--r-md);font-size:13px;outline:none">
+        <button class="btn btn--sm btn--kitchen" onclick="loadDispatchList()">
+          <i class="ti ti-refresh"></i> 更新
+        </button>
+        <button class="btn btn--sm btn--kitchen" onclick="showPage('new-dispatch')">
+          <i class="ti ti-plus"></i> 新增
+        </button>
       </div>
     </div>
     <div id="disp-list">${spinHTML()}</div>`;
   loadDispatchList();
 }
 
-async function loadDispatchList() {
+window.loadDispatchList = async function() {
   const date = $('disp-date')?.value || t();
   const c = $('disp-list'); if (!c) return;
   c.innerHTML = spinHTML();
   try {
-    const res = await API.getDispatches(date);
+    const res  = await API.getDispatches(date);
     const rows = res.data || [];
-    if (!rows.length) { c.innerHTML = `<div class="card">${noDataHTML()}</div>`; return; }
+    if (!rows.length) { c.innerHTML = `<div class="card card--kitchen">${noDataHTML()}</div>`; return; }
     c.innerHTML = `<div class="card card--kitchen"><div class="table-wrap table-wrap--kitchen"><table>
       <thead><tr>
         <th>攤位</th><th>配發人</th>
         <th>底料 大/中/小</th><th>米 大/中/小</th><th>芋頭 大/中/小</th>
-        <th>芋泥(包)</th><th>碎皮蛋</th><th>整皮蛋</th><th>芹菜</th><th>菜脯</th>
-        <th>備註</th>
+        <th>芋泥(包)</th><th>碎皮蛋</th><th>整皮蛋</th><th>芹菜</th><th>菜脯</th><th>備註</th>
       </tr></thead>
-      <tbody>${rows.map(r => `<tr>
+      <tbody>${rows.map(r=>`<tr>
         <td><strong>${r.stall_name||r.stall_id}</strong></td>
         <td>${r.dispatcher||'—'}</td>
         <td class="td-num">${r.base_L||0}/${r.base_M||0}/${r.base_S||0}</td>
@@ -122,8 +133,7 @@ async function loadDispatchList() {
       </tr>`).join('')}</tbody>
     </table></div></div>`;
   } catch(e) { c.innerHTML = errHTML(e); }
-}
-window.loadDispatchList = loadDispatchList;
+};
 
 // ═══════════════════════════════════════════════════════════════
 // 新增配發
@@ -131,15 +141,18 @@ window.loadDispatchList = loadDispatchList;
 function renderNewDispatch(el) {
   const stalls = KitchenApp.cache.stalls || [];
   const sz = ['大','中','小'];
-
   el.innerHTML = `
-    <div class="section-title mb-16" style="margin-bottom:16px"><i class="ti ti-plus"></i>新增配發記錄</div>
-    <div class="card">
+    <div class="section-title mb-16" style="margin-bottom:16px">
+      <i class="ti ti-plus"></i>新增配發記錄
+    </div>
+    <div class="card card--kitchen">
       <form id="dispatch-form" novalidate>
         <div class="form-section">
           <div class="form-section__title"><i class="ti ti-info-circle"></i>基本資料</div>
           <div class="fg fg3">
-            <div class="field"><label>日期</label><input type="date" name="date" value="${t()}" required></div>
+            <div class="field"><label>日期</label>
+              <input type="date" name="date" value="${t()}" required>
+            </div>
             <div class="field"><label>攤位 *</label>
               <select name="stall_id" required>
                 <option value="">請選擇攤位…</option>
@@ -148,30 +161,39 @@ function renderNewDispatch(el) {
             </div>
             <div class="field"><label>配發人</label>
               <select name="dispatcher">
-                <option>阿明</option><option>阿華</option><option>阿成</option><option>其他</option>
+                ${(KitchenApp.cache.settings?.['配發人清單']||'阿明,阿華,阿成,其他').split(',')
+                  .map(n=>`<option value="${n.trim()}">${n.trim()}</option>`).join('')}
               </select>
             </div>
           </div>
         </div>
-
         <div class="form-section">
           <div class="form-section__title"><i class="ti ti-droplet"></i>底料配發</div>
-          <div class="fg fg3">${sz.map(s=>`<div class="field"><label>底料（${s}）</label><input type="number" name="base_${s==='大'?'L':s==='中'?'M':'S'}" min="0" step="0.5" value="0"></div>`).join('')}</div>
+          <div class="fg fg3">
+            ${sz.map(s=>`<div class="field"><label>底料（${s}）</label>
+              <input type="number" name="base_${s==='大'?'L':s==='中'?'M':'S'}" min="0" step="0.5" value="0">
+            </div>`).join('')}
+          </div>
         </div>
-
         <div class="form-section">
           <div class="form-section__title"><i class="ti ti-grain"></i>米配發</div>
-          <div class="fg fg3">${sz.map(s=>`<div class="field"><label>米（${s}）</label><input type="number" name="rice_${s==='大'?'L':s==='中'?'M':'S'}" min="0" step="0.5" value="0"></div>`).join('')}</div>
+          <div class="fg fg3">
+            ${sz.map(s=>`<div class="field"><label>米（${s}）</label>
+              <input type="number" name="rice_${s==='大'?'L':s==='中'?'M':'S'}" min="0" step="0.5" value="0">
+            </div>`).join('')}
+          </div>
         </div>
-
         <div class="form-section">
           <div class="form-section__title"><i class="ti ti-plant"></i>芋頭 / 芋泥</div>
           <div class="fg fg4">
-            ${sz.map(s=>`<div class="field"><label>芋頭（${s}）</label><input type="number" name="taro_${s==='大'?'L':s==='中'?'M':'S'}" min="0" step="0.5" value="0"></div>`).join('')}
-            <div class="field"><label>芋泥（包）</label><input type="number" name="taro_paste" min="0" step="0.5" value="0"></div>
+            ${sz.map(s=>`<div class="field"><label>芋頭（${s}）</label>
+              <input type="number" name="taro_${s==='大'?'L':s==='中'?'M':'S'}" min="0" step="0.5" value="0">
+            </div>`).join('')}
+            <div class="field"><label>芋泥（包）</label>
+              <input type="number" name="taro_paste" min="0" step="0.5" value="0">
+            </div>
           </div>
         </div>
-
         <div class="form-section">
           <div class="form-section__title"><i class="ti ti-egg"></i>其他配料</div>
           <div class="fg fg4">
@@ -181,14 +203,16 @@ function renderNewDispatch(el) {
             <div class="field"><label>菜脯（碗）</label><input type="number" name="pickled_radish" min="0" step="0.5" value="0"></div>
           </div>
         </div>
-
         <div class="form-section" style="margin-bottom:0">
           <div class="field"><label>備註</label><textarea name="note" placeholder="選填"></textarea></div>
         </div>
-
         <div class="btn-row">
-          <button type="button" class="btn" onclick="UI.resetForm(document.getElementById('dispatch-form'))"><i class="ti ti-eraser"></i>清除</button>
-          <button type="submit" class="btn btn--kitchen" id="btn-dispatch"><i class="ti ti-device-floppy"></i>儲存配發記錄</button>
+          <button type="button" class="btn" onclick="UI.resetForm(document.getElementById('dispatch-form'))">
+            <i class="ti ti-eraser"></i>清除
+          </button>
+          <button type="submit" class="btn btn--kitchen" id="btn-dispatch">
+            <i class="ti ti-device-floppy"></i>儲存配發記錄
+          </button>
         </div>
       </form>
     </div>`;
@@ -199,7 +223,8 @@ function renderNewDispatch(el) {
     if (!data.stall_id) { UI.toast('請選擇攤位', 'error'); return; }
     const stall = KitchenApp.cache.stalls.find(s => s.stall_id === data.stall_id);
     data.stall_name = stall?.stall_name || '';
-    const btn = $('btn-dispatch'); UI.btnLoad(btn, true, '儲存中…');
+    const btn = $('btn-dispatch');
+    UI.btnLoad(btn, true, '儲存中…');
     try {
       await API.saveDispatch(data);
       UI.toast(`✓ ${data.stall_name} 配發記錄已儲存`);
@@ -213,247 +238,107 @@ function renderNewDispatch(el) {
 // ═══════════════════════════════════════════════════════════════
 // 昨日剩料
 // ═══════════════════════════════════════════════════════════════
-async function renderLeftover(el) {
+function renderLeftover(el) {
   const yest = yesterday();
   el.innerHTML = `
     <div class="section-header mb-16" style="margin-bottom:16px">
       <div class="section-title"><i class="ti ti-history"></i>昨日攤位剩料（${yest}）</div>
     </div>
     <div id="leftover-content">${spinHTML()}</div>`;
-  try {
-    const res = await API.getReports(yest);
-    const rows = res.data || [];
-    const c = $('leftover-content');
-    if (!rows.length) { c.innerHTML = `<div class="card">${noDataHTML()}</div>`; return; }
-    c.innerHTML = `<div class="card card--kitchen"><div class="table-wrap table-wrap--kitchen"><table>
-      <thead><tr>
-        <th>攤位</th><th>底料 大/中/小</th><th>米 大/中/小</th><th>芋頭 大/中/小</th>
-        <th>芋泥</th><th>碎皮蛋</th><th>整皮蛋</th><th>芹菜</th><th>菜脯</th>
-      </tr></thead>
-      <tbody>${rows.map(r=>`<tr>
-        <td><strong>${r.stall_name||r.stall_id}</strong></td>
-        <td class="td-num">${r.rem_base_L||0}/${r.rem_base_M||0}/${r.rem_base_S||0}</td>
-        <td class="td-num">${r.rem_rice_L||0}/${r.rem_rice_M||0}/${r.rem_rice_S||0}</td>
-        <td class="td-num">${r.rem_taro_L||0}/${r.rem_taro_M||0}/${r.rem_taro_S||0}</td>
-        <td class="td-num">${r.rem_taro_paste||0}</td>
-        <td class="td-num">${r.rem_broken_egg||0}</td>
-        <td class="td-num">${r.rem_whole_egg||0}</td>
-        <td class="td-num">${r.rem_celery||0}</td>
-        <td class="td-num">${r.rem_pickled_radish||0}</td>
-      </tr>`).join('')}</tbody>
-    </table></div></div>`;
-  } catch(e) { $('leftover-content').innerHTML = errHTML(e); }
+  (async () => {
+    try {
+      const res  = await API.getReports(yest);
+      const rows = res.data || [];
+      const c = $('leftover-content');
+      if (!rows.length) { c.innerHTML = `<div class="card card--kitchen">${noDataHTML()}</div>`; return; }
+      c.innerHTML = `<div class="card card--kitchen"><div class="table-wrap table-wrap--kitchen"><table>
+        <thead><tr>
+          <th>攤位</th><th>底料 大/中/小</th><th>米 大/中/小</th><th>芋頭 大/中/小</th>
+          <th>芋泥</th><th>碎皮蛋</th><th>整皮蛋</th><th>芹菜</th><th>菜脯</th>
+        </tr></thead>
+        <tbody>${rows.map(r=>`<tr>
+          <td><strong>${r.stall_name||r.stall_id}</strong></td>
+          <td class="td-num">${r.rem_base_L||0}/${r.rem_base_M||0}/${r.rem_base_S||0}</td>
+          <td class="td-num">${r.rem_rice_L||0}/${r.rem_rice_M||0}/${r.rem_rice_S||0}</td>
+          <td class="td-num">${r.rem_taro_L||0}/${r.rem_taro_M||0}/${r.rem_taro_S||0}</td>
+          <td class="td-num">${r.rem_taro_paste||0}</td>
+          <td class="td-num">${r.rem_broken_egg||0}</td>
+          <td class="td-num">${r.rem_whole_egg||0}</td>
+          <td class="td-num">${r.rem_celery||0}</td>
+          <td class="td-num">${r.rem_pickled_radish||0}</td>
+        </tr>`).join('')}</tbody>
+      </table></div></div>`;
+    } catch(e) { $('leftover-content').innerHTML = errHTML(e); }
+  })();
 }
 
 // ═══════════════════════════════════════════════════════════════
-// 建議備料（昨日銷售 - 昨日剩料 = 今日建議）
+// 建議備料
 // ═══════════════════════════════════════════════════════════════
-async function renderSuggestion(el) {
+function renderSuggestion(el) {
   const yest = yesterday();
   el.innerHTML = `
-    <div class="section-title mb-16" style="margin-bottom:16px"><i class="ti ti-bulb"></i>今日建議備料（依昨日推算）</div>
+    <div class="section-title mb-16" style="margin-bottom:16px">
+      <i class="ti ti-bulb"></i>今日建議備料（依昨日推算）
+    </div>
     <div id="suggestion-content">${spinHTML()}</div>`;
-  try {
-    const [dispRes, repRes] = await Promise.all([API.getDispatches(yest), API.getReports(yest)]);
-    const dispatches = dispRes.data || [];
-    const reports    = repRes.data  || [];
-    const stalls     = KitchenApp.cache.stalls || [];
-    const c = $('suggestion-content');
-
-    if (!dispatches.length || !reports.length) {
-      c.innerHTML = `<div class="card"><div class="alert-row alert-row--warning"><i class="ti ti-info-circle alert-row__icon"></i><div class="alert-row__body"><strong>資料不足</strong><span>昨日配發或回報資料不完整，無法計算建議備料。</span></div></div></div>`;
-      return;
-    }
-
-    const fields = [
-      { label:'底料大', dKey:'base_L', rKey:'rem_base_L' },
-      { label:'底料中', dKey:'base_M', rKey:'rem_base_M' },
-      { label:'底料小', dKey:'base_S', rKey:'rem_base_S' },
-      { label:'米大',   dKey:'rice_L', rKey:'rem_rice_L' },
-      { label:'米中',   dKey:'rice_M', rKey:'rem_rice_M' },
-      { label:'米小',   dKey:'rice_S', rKey:'rem_rice_S' },
-    ];
-
-    c.innerHTML = stalls.map(stall => {
-      const d = dispatches.find(x => x.stall_id === stall.stall_id);
-      const r = reports.find(x => x.stall_id === stall.stall_id);
-      if (!d && !r) return '';
-      const rows = fields.map(f => {
-        const sent = Number(d?.[f.dKey]||0);
-        const rem  = Number(r?.[f.rKey]||0);
-        const used = sent - rem;
-        const suggest = Math.max(0, Math.ceil(used * 1.1)); // 加1成緩衝
-        return `<div class="stall-card__row">
-          <span class="stall-card__row-label">${f.label}</span>
-          <span class="td-muted">昨送 ${sent} 剩 ${rem} → 用 ${used}</span>
-          <span class="stall-card__row-val c-sky fw-700">建議 ${suggest}</span>
-        </div>`;
-      }).join('');
-      return `<div class="stall-card" style="margin-bottom:14px">
-        <div class="stall-card__head"><div class="stall-card__name"><span class="dot dot--sky"></span>${stall.stall_name}</div></div>
-        <div class="stall-card__body">${rows}</div>
-        <div class="stall-card__footer"><span>建議數量 = 昨日實際用量 × 1.1（含緩衝）</span></div>
-      </div>`;
-    }).join('') || noDataHTML();
-  } catch(e) { $('suggestion-content').innerHTML = errHTML(e); }
-}
-
-// ═══════════════════════════════════════════════════════════════
-// 庫存管理（廚房版：入出庫 + 目前庫存，不顯示金額分析）
-// ═══════════════════════════════════════════════════════════════
-async function renderInventory(el) {
-  const ings = (KitchenApp.cache.ingredients||[]).filter(i => String(i.in_inventory).toUpperCase() === 'TRUE');
-  el.innerHTML = `
-    <div class="grid g2-1" style="gap:20px">
-      <div>
-        <div class="section-title mb-16" style="margin-bottom:12px"><i class="ti ti-package"></i>目前庫存</div>
-        <div class="card" id="k-inv-overview">${spinHTML()}</div>
-      </div>
-      <div>
-        <div class="section-title mb-16" style="margin-bottom:12px"><i class="ti ti-arrows-transfer-up"></i>入庫 / 出庫</div>
-        <div class="card">
-          <form id="k-inv-form" novalidate>
-            <div class="fg" style="gap:12px">
-              <div class="field"><label>日期</label><input type="date" name="date" value="${t()}"></div>
-              <div class="field"><label>類型</label><select name="type"><option value="in">入庫</option><option value="out">出庫（廚房使用）</option></select></div>
-              <div class="field"><label>品項</label>
-                <select name="item_id" id="k-inv-item">
-                  <option value="">請選擇…</option>
-                  ${ings.map(i=>`<option value="${i.ingredient_id}" data-unit="${i.unit}">${i.ingredient_name}（${i.unit}）</option>`).join('')}
-                </select>
-              </div>
-              <div class="field"><label>數量</label><input type="number" name="qty" min="0.1" step="0.1" value="1"></div>
-              <div class="field"><label>備註</label><input type="text" name="note" placeholder="例：早市採購"></div>
-            </div>
-            <div class="btn-row"><button type="submit" class="btn btn--kitchen" id="btn-k-inv"><i class="ti ti-device-floppy"></i>儲存</button></div>
-          </form>
-        </div>
-      </div>
-    </div>
-    <div class="section-title mt-24 mb-16" style="margin-top:20px;margin-bottom:12px"><i class="ti ti-history"></i>近期異動記錄</div>
-    <div class="card" id="k-inv-log">${spinHTML()}</div>`;
-
-  loadKitchenInv();
-  $('k-inv-form').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const data = UI.formData(e.target);
-    if (!data.item_id) { UI.toast('請選擇品項', 'error'); return; }
-    const opt = $('k-inv-item').selectedOptions[0];
-    data.item_name = opt?.text?.split('（')[0] || '';
-    data.unit = opt?.dataset?.unit || '';
-    data.unit_price = 0; // 廚房員工不填單價
-    const btn = $('btn-k-inv'); UI.btnLoad(btn, true);
-    try { await API.saveInventoryLog(data); UI.toast('✓ 已儲存'); UI.resetForm(e.target); e.target.querySelector('[name="date"]').value=t(); loadKitchenInv(); }
-    catch(err) { UI.toast(err.message,'error'); }
-    finally { UI.btnLoad(btn,false); }
-  });
-}
-
-async function loadKitchenInv() {
-  const [ov, lg] = [$('k-inv-overview'), $('k-inv-log')];
-  try {
-    const res = await API.getInventory();
-    const items = res.data || [];
-    if (ov) ov.innerHTML = items.map(item => {
-      const pct = Math.min(100, Math.round(item.current_stock/item.min_stock*100));
-      const cls = item.is_low ? 'low' : pct < 60 ? 'warn' : '';
-      return `<div class="stock-item">
-        <div class="stock-item__header">
-          <span class="stock-item__name">${item.item_name}</span>
-          <span class="stock-item__qty ${item.is_low?'low':''}">${fn(item.current_stock)} / ${fn(item.min_stock)} ${item.unit}${item.is_low?' ⚠':''}</span>
-        </div>
-        <div class="stock-bar"><div class="stock-bar__fill ${cls}" style="width:${pct}%"></div></div>
-      </div>`;
-    }).join('') || noDataHTML();
-  } catch(e) { if(ov) ov.innerHTML = errHTML(e); }
-  if (lg) lg.innerHTML = '<div class="empty" style="padding:20px"><p style="font-size:12px">庫存異動記錄請至老闆後台查看完整記錄。</p></div>';
-}
-
-// ═══════════════════════════════════════════════════════════════
-// 成本輸入（廚房員工可以輸入人事、司機成本，不顯示毛利計算）
-// ═══════════════════════════════════════════════════════════════
-function renderCostInput(el) {
-  el.innerHTML = `
-    <div class="section-title mb-16" style="margin-bottom:16px"><i class="ti ti-receipt"></i>今日成本輸入</div>
-    <div class="card" style="max-width:560px">
-      <div class="alert-row alert-row--warning" style="margin-bottom:16px">
-        <i class="ti ti-info-circle alert-row__icon"></i>
-        <div class="alert-row__body"><strong>說明</strong><span>請輸入廚房今日實際成本。損益計算由老闆後台負責。</span></div>
-      </div>
-      <form id="cost-form" novalidate>
-        <div class="fg fg3" style="margin-bottom:14px">
-          <div class="field"><label>日期</label><input type="date" name="date" value="${t()}"></div>
-          <div class="field"><label>成本類型</label>
-            <select name="type">
-              <option value="labor">廚房人事費</option>
-              <option value="driver">司機費用</option>
-              <option value="ingredient">食材採購</option>
-              <option value="other">其他</option>
-            </select>
+  (async () => {
+    try {
+      const [dispRes, repRes] = await Promise.all([API.getDispatches(yest), API.getReports(yest)]);
+      const dispatches = dispRes.data || [];
+      const reports    = repRes.data  || [];
+      const stalls     = KitchenApp.cache.stalls || [];
+      const c = $('suggestion-content');
+      if (!dispatches.length || !reports.length) {
+        c.innerHTML = `<div class="card card--kitchen"><div class="alert-row alert-row--warning">
+          <i class="ti ti-info-circle alert-row__icon"></i>
+          <div class="alert-row__body"><strong>資料不足</strong>
+          <span>昨日配發或回報資料不完整，無法計算建議備料。</span></div>
+        </div></div>`;
+        return;
+      }
+      const fields = [
+        { label:'底料大', dKey:'base_L', rKey:'rem_base_L' },
+        { label:'底料中', dKey:'base_M', rKey:'rem_base_M' },
+        { label:'底料小', dKey:'base_S', rKey:'rem_base_S' },
+        { label:'米大',   dKey:'rice_L', rKey:'rem_rice_L' },
+        { label:'米中',   dKey:'rice_M', rKey:'rem_rice_M' },
+        { label:'米小',   dKey:'rice_S', rKey:'rem_rice_S' },
+        { label:'芋頭大', dKey:'taro_L', rKey:'rem_taro_L' },
+        { label:'芋頭中', dKey:'taro_M', rKey:'rem_taro_M' },
+        { label:'芋頭小', dKey:'taro_S', rKey:'rem_taro_S' },
+        { label:'芋泥',   dKey:'taro_paste', rKey:'rem_taro_paste' },
+      ];
+      c.innerHTML = stalls.map(stall => {
+        const d = dispatches.find(x => x.stall_id === stall.stall_id);
+        const r = reports.find(x => x.stall_id === stall.stall_id);
+        if (!d && !r) return '';
+        const rows = fields.map(f => {
+          const sent    = Number(d?.[f.dKey]||0);
+          const rem     = Number(r?.[f.rKey]||0);
+          const used    = Math.max(0, sent - rem);
+          const suggest = Math.ceil(used * 1.1);
+          return `<div class="stall-card__row">
+            <span class="stall-card__row-label">${f.label}</span>
+            <span class="td-muted" style="font-size:11px">昨送${sent} 剩${rem} 用${used}</span>
+            <span class="stall-card__row-val c-orange fw-700">建議 ${suggest}</span>
+          </div>`;
+        }).join('');
+        return `<div class="stall-card stall-card--kitchen" style="margin-bottom:14px">
+          <div class="stall-card__head">
+            <div class="stall-card__name"><span class="dot dot--sky"></span>${stall.stall_name}</div>
           </div>
-          <div class="field"><label>金額 ($)</label><input type="number" name="amount" min="0" value="0" required></div>
-        </div>
-        <div class="field" style="margin-bottom:14px"><label>備註說明</label><input type="text" name="note" placeholder="例：今日阿明加班費、早市買芋頭…"></div>
-        <div class="btn-row"><button type="submit" class="btn btn--kitchen" id="btn-cost"><i class="ti ti-device-floppy"></i>送出成本記錄</button></div>
-      </form>
-    </div>
-    <div id="cost-today-list" style="margin-top:20px"></div>`;
-
-  $('cost-form').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const data = UI.formData(e.target); const btn = $('btn-cost');
-    if (!data.amount) { UI.toast('請填入金額', 'error'); return; }
-    UI.btnLoad(btn, true);
-    try { await API.saveKitchenCost(data); UI.toast('✓ 成本已送出'); UI.resetForm(e.target); e.target.querySelector('[name="date"]').value=t(); loadTodayCosts(); }
-    catch(err) { UI.toast(err.message,'error'); }
-    finally { UI.btnLoad(btn, false); }
-  });
-  loadTodayCosts();
-}
-
-async function loadTodayCosts() {
-  const c = $('cost-today-list'); if(!c) return;
-  try {
-    const res = await API.getKitchenCosts(t()); const rows = res.data||[];
-    if(!rows.length){ c.innerHTML=''; return; }
-    c.innerHTML = `<div class="section-title mb-16" style="margin-bottom:12px"><i class="ti ti-list"></i>今日已輸入成本</div>
-    <div class="card card--kitchen"><div class="table-wrap table-wrap--kitchen"><table>
-      <thead><tr><th>類型</th><th>金額</th><th>備註</th></tr></thead>
-      <tbody>${rows.map(r=>`<tr><td><span class="badge badge--gray">${r.type}</span></td><td class="td-num">${UI.fmtMoney(r.amount)}</td><td class="td-muted">${r.note||'—'}</td></tr>`).join('')}</tbody>
-    </table></div></div>`;
-  } catch(e) { c.innerHTML=errHTML(e); }
+          <div class="stall-card__body">${rows}</div>
+          <div class="stall-card__footer"><span>建議 = 昨日用量 × 1.1（含緩衝）</span></div>
+        </div>`;
+      }).join('') || noDataHTML();
+    } catch(e) { $('suggestion-content').innerHTML = errHTML(e); }
+  })();
 }
 
 // ═══════════════════════════════════════════════════════════════
 // 週計畫
 // ═══════════════════════════════════════════════════════════════
-function getWeekDates(weekStr) {
-  // weekStr: 'yyyy-Www' 或空字串（本週）
-  if (!weekStr) {
-    const now = new Date();
-    const day = now.getDay() || 7;
-    now.setDate(now.getDate() - day + 1);
-    const dates = [];
-    for (let i = 0; i < 7; i++) {
-      const d = new Date(now); d.setDate(now.getDate() + i);
-      dates.push(d.toISOString().slice(0, 10));
-    }
-    return dates;
-  }
-  const [y, w] = weekStr.split('-W');
-  const jan1 = new Date(+y, 0, 1);
-  const days  = (+w - 1) * 7;
-  const start = new Date(jan1.getTime() + days * 86400000);
-  const dow   = start.getDay() || 7;
-  start.setDate(start.getDate() - dow + 1);
-  const dates = [];
-  for (let i = 0; i < 7; i++) {
-    const d = new Date(start); d.setDate(start.getDate() + i);
-    dates.push(d.toISOString().slice(0, 10));
-  }
-  return dates;
-}
-
 function currentWeekStr() {
   const now  = new Date();
   const year = now.getFullYear();
@@ -462,7 +347,19 @@ function currentWeekStr() {
   return year + '-W' + String(week).padStart(2, '0');
 }
 
-async function renderWeeklyPlan(el) {
+function getWeekDates(weekStr) {
+  const [y, w] = weekStr.split('-W');
+  const jan1 = new Date(+y, 0, 1);
+  const start = new Date(jan1.getTime() + (+w - 1) * 7 * 86400000);
+  const dow   = start.getDay() || 7;
+  start.setDate(start.getDate() - dow + 1);
+  return Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(start); d.setDate(start.getDate() + i);
+    return d.toISOString().slice(0, 10);
+  });
+}
+
+function renderWeeklyPlan(el) {
   const weekStr = currentWeekStr();
   el.innerHTML = `
     <div class="section-header" style="margin-bottom:20px">
@@ -470,8 +367,7 @@ async function renderWeeklyPlan(el) {
       <div style="display:flex;gap:8px;align-items:center">
         <input type="week" id="week-input" value="${weekStr}"
                style="padding:7px 10px;border:1.5px solid var(--kitchen-card-border);
-                      border-radius:var(--r-md);font-size:13px;outline:none;
-                      background:var(--white)">
+                      border-radius:var(--r-md);font-size:13px;outline:none;background:var(--white)">
         <button class="btn btn--kitchen btn--sm" onclick="loadWeeklyPlan()">
           <i class="ti ti-refresh"></i> 切換
         </button>
@@ -489,84 +385,70 @@ window.loadWeeklyPlan = async function() {
     const res   = await API.getWeeklyPlan(weekStr, '');
     const tasks = res.data || [];
     const dates = getWeekDates(weekStr);
-    const dayNames = ['一','二','三','四','五','六','日'];
-    const priorityColor = { '高':'badge--red', '中':'badge--amber', '低':'badge--gray' };
-    const statusColor   = { '待完成':'badge--gray', '進行中':'badge--sky', '完成':'badge--green' };
-
+    const dayNames  = ['一','二','三','四','五','六','日'];
+    const priColor  = { '高':'badge--red', '中':'badge--amber', '低':'badge--gray' };
+    const statColor = { '待完成':'badge--gray', '進行中':'badge--sky', '完成':'badge--green' };
     const byDate = {};
     dates.forEach(d => { byDate[d] = []; });
-    tasks.forEach(task => {
-      if (byDate[task.date]) byDate[task.date].push(task);
-    });
+    tasks.forEach(task => { if (byDate[task.date]) byDate[task.date].push(task); });
 
     c.innerHTML = `
-      <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:8px">
+      <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:8px;margin-bottom:24px">
         ${dates.map((date, i) => {
           const dayTasks = byDate[date] || [];
           const isToday  = date === t();
-          return `
-            <div style="background:${isToday?'var(--kitchen-section-head)':'var(--white)'};
-                        border:${isToday?'2px solid var(--kitchen-sidebar-accent)':'1px solid var(--kitchen-card-border)'};
-                        border-radius:var(--r-lg);padding:10px;min-height:120px">
-              <div style="font-size:11px;font-weight:700;color:var(--amber-700);margin-bottom:2px;text-transform:uppercase">
-                週${dayNames[i]}
-              </div>
-              <div style="font-size:12px;color:var(--ink-500);margin-bottom:8px">${date.slice(5)}</div>
-              ${dayTasks.length === 0
-                ? `<div style="font-size:11px;color:var(--ink-300);text-align:center;padding:10px 0">—</div>`
-                : dayTasks.map(task => `
-                  <div style="background:var(--white);border:1px solid var(--kitchen-card-border);
-                              border-radius:var(--r-md);padding:8px;margin-bottom:6px;cursor:pointer"
-                       onclick="openTaskModal('${task.task_id}','${task.status}','${encodeURIComponent(task.note)}')">
-                    <div style="font-size:12px;font-weight:600;color:var(--ink-900);margin-bottom:4px;line-height:1.3">
-                      ${task.content}
-                    </div>
-                    <div style="display:flex;gap:4px;flex-wrap:wrap">
-                      <span class="badge ${priorityColor[task.priority]||'badge--gray'}" style="font-size:9px;padding:1px 5px">${task.priority}</span>
-                      <span class="badge ${statusColor[task.status]||'badge--gray'}" style="font-size:9px;padding:1px 5px">${task.status}</span>
-                    </div>
-                    ${task.assignee ? `<div style="font-size:10px;color:var(--ink-400);margin-top:3px">👤 ${task.assignee}</div>` : ''}
-                  </div>`).join('')}
-            </div>`;
+          return `<div style="background:${isToday?'var(--kitchen-section-head)':'var(--white)'};
+                              border:${isToday?'2px solid var(--kitchen-sidebar-accent)':'1px solid var(--kitchen-card-border)'};
+                              border-radius:var(--r-lg);padding:10px;min-height:120px">
+            <div style="font-size:11px;font-weight:700;color:var(--amber-700);text-transform:uppercase">週${dayNames[i]}</div>
+            <div style="font-size:12px;color:var(--ink-500);margin-bottom:8px">${date.slice(5)}</div>
+            ${dayTasks.length === 0
+              ? '<div style="font-size:11px;color:var(--ink-300);text-align:center;padding:8px 0">—</div>'
+              : dayTasks.map(task => `
+                <div style="background:var(--white);border:1px solid var(--kitchen-card-border);
+                            border-radius:var(--r-md);padding:7px;margin-bottom:5px;cursor:pointer"
+                     onclick="openTaskModal('${task.task_id}','${task.status}','${encodeURIComponent(task.note||'')}')">
+                  <div style="font-size:11px;font-weight:600;color:var(--ink-900);line-height:1.3;margin-bottom:3px">${task.content}</div>
+                  <div style="display:flex;gap:3px;flex-wrap:wrap">
+                    <span class="badge ${priColor[task.priority]||'badge--gray'}" style="font-size:9px;padding:1px 5px">${task.priority||'中'}</span>
+                    <span class="badge ${statColor[task.status]||'badge--gray'}" style="font-size:9px;padding:1px 5px">${task.status}</span>
+                  </div>
+                </div>`).join('')}
+          </div>`;
         }).join('')}
       </div>
 
-      <!-- 任務清單（可勾選） -->
-      <div class="section-title" style="margin-top:24px;margin-bottom:12px">
-        <i class="ti ti-list-check"></i>本週任務清單
-      </div>
+      <div class="section-title" style="margin-bottom:12px"><i class="ti ti-list-check"></i>本週任務清單</div>
       <div class="card card--kitchen">
         ${tasks.length === 0 ? noDataHTML() : tasks.map(task => `
           <div style="display:flex;align-items:flex-start;gap:12px;padding:12px 0;
                       border-bottom:1px solid var(--kitchen-card-border)">
-            <div style="flex-shrink:0;margin-top:2px">
-              <input type="checkbox" id="ck-${task.task_id}"
-                     ${task.status==='完成'?'checked':''}
-                     onchange="updateTaskStatus('${task.task_id}',this.checked)"
-                     style="width:18px;height:18px;cursor:pointer;accent-color:var(--kitchen-sidebar-accent)">
-            </div>
+            <input type="checkbox" id="ck-${task.task_id}"
+                   ${task.status==='完成'?'checked':''}
+                   onchange="updateTaskStatus('${task.task_id}',this.checked)"
+                   style="width:18px;height:18px;margin-top:2px;cursor:pointer;
+                          accent-color:var(--kitchen-sidebar-accent);flex-shrink:0">
             <div style="flex:1;min-width:0">
-              <div style="font-size:14px;font-weight:600;color:var(--ink-900);
-                          ${task.status==='完成'?'text-decoration:line-through;color:var(--ink-400)':''}">
+              <div style="font-size:14px;font-weight:600;
+                          ${task.status==='完成'?'text-decoration:line-through;color:var(--ink-400)':'color:var(--ink-900)'}">
                 ${task.content}
               </div>
               <div style="display:flex;gap:6px;margin-top:4px;flex-wrap:wrap;align-items:center">
                 <span style="font-size:11px;color:var(--ink-400)">${task.date}</span>
-                <span class="badge badge--orange" style="font-size:9px">${task.type}</span>
-                ${task.assignee ? `<span style="font-size:11px;color:var(--ink-400)">👤 ${task.assignee}</span>` : ''}
+                <span class="badge badge--orange" style="font-size:9px">${task.type||''}</span>
+                ${task.assignee?`<span style="font-size:11px;color:var(--ink-400)">👤 ${task.assignee}</span>`:''}
               </div>
-              ${task.note ? `<div style="font-size:12px;color:var(--ink-500);margin-top:4px;background:var(--kitchen-section-head);padding:4px 8px;border-radius:var(--r-sm)">✏️ ${task.note}</div>` : ''}
+              ${task.note?`<div style="font-size:12px;color:var(--ink-500);margin-top:4px;
+                                       background:var(--kitchen-section-head);padding:4px 8px;
+                                       border-radius:var(--r-sm)">✏️ ${task.note}</div>`:''}
             </div>
-            <div style="flex-shrink:0">
-              <span class="badge ${statusColor[task.status]||'badge--gray'}">${task.status}</span>
-            </div>
+            <span class="badge ${statColor[task.status]||'badge--gray'}">${task.status}</span>
           </div>`).join('')}
-      </div>`;
+      </div>
 
-    // 任務備註 Modal
-    c.innerHTML += `
-      <div id="task-modal" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,.5);
-           z-index:9999;align-items:center;justify-content:center;backdrop-filter:blur(2px)">
+      <div id="task-modal" style="display:none;position:fixed;inset:0;
+           background:rgba(15,23,42,.5);z-index:9999;align-items:center;
+           justify-content:center;backdrop-filter:blur(2px)">
         <div style="background:var(--white);border-radius:var(--r-xl);padding:28px;
                     width:90%;max-width:420px;box-shadow:var(--shadow-lg)">
           <div style="font-size:16px;font-weight:700;margin-bottom:16px">更新任務狀態</div>
@@ -580,9 +462,11 @@ window.loadWeeklyPlan = async function() {
             </select>
           </div>
           <div class="field" style="margin-bottom:16px">
-            <label>備註說明</label>
-            <textarea id="modal-note" rows="3" placeholder="說明進度或完成情況…"
-                      style="padding:10px;border:1.5px solid var(--kitchen-card-border);border-radius:var(--r-md);font-size:13px;width:100%;resize:vertical"></textarea>
+            <label>備註</label>
+            <textarea id="modal-note" rows="3"
+                      style="padding:10px;border:1.5px solid var(--kitchen-card-border);
+                             border-radius:var(--r-md);font-size:13px;width:100%;resize:vertical">
+            </textarea>
           </div>
           <div style="display:flex;gap:8px;justify-content:flex-end">
             <button class="btn btn--sm" onclick="closeTaskModal()">取消</button>
@@ -597,12 +481,12 @@ window.loadWeeklyPlan = async function() {
 
 window.openTaskModal = function(taskId, status, noteEnc) {
   $('modal-task-id').value = taskId;
-  $('modal-status').value  = status;
+  $('modal-status').value  = decodeURIComponent(status);
   $('modal-note').value    = decodeURIComponent(noteEnc);
   $('task-modal').style.display = 'flex';
 };
 window.closeTaskModal = function() {
-  $('task-modal').style.display = 'none';
+  const m = $('task-modal'); if (m) m.style.display = 'none';
 };
 window.saveTaskModal = async function() {
   const btn = $('btn-modal-save');
@@ -621,19 +505,15 @@ window.saveTaskModal = async function() {
 };
 window.updateTaskStatus = async function(taskId, checked) {
   try {
-    await API.saveWeeklyPlanStatus({
-      task_id: taskId,
-      status:  checked ? '完成' : '待完成',
-      note:    '',
-    });
-    UI.toast(checked ? '✓ 任務標記完成' : '任務重設為待完成');
+    await API.saveWeeklyPlanStatus({ task_id: taskId, status: checked?'完成':'待完成', note:'' });
+    UI.toast(checked ? '✓ 任務完成' : '任務重設為待完成');
   } catch(e) { UI.toast(e.message, 'error'); }
 };
 
 // ═══════════════════════════════════════════════════════════════
 // 月曆
 // ═══════════════════════════════════════════════════════════════
-async function renderMonthlyCal(el) {
+function renderMonthlyCal(el) {
   const month = UI.monthISO();
   el.innerHTML = `
     <div class="section-header" style="margin-bottom:20px">
@@ -658,88 +538,65 @@ window.loadMonthlyCal = async function() {
   try {
     const res   = await API.getWeeklyPlan('', month);
     const tasks = res.data || [];
-
     const [y, m] = month.split('-').map(Number);
-    const firstDay = new Date(y, m-1, 1);
-    const lastDay  = new Date(y, m, 0);
-    const startDow = (firstDay.getDay() || 7) - 1; // 0=週一
+    const firstDay  = new Date(y, m-1, 1);
+    const lastDay   = new Date(y, m, 0);
+    const startDow  = (firstDay.getDay() || 7) - 1;
     const totalDays = lastDay.getDate();
-
-    // 按日期分組
     const byDate = {};
     tasks.forEach(task => {
       const d = String(task.date);
       if (!byDate[d]) byDate[d] = [];
       byDate[d].push(task);
     });
-
-    const dayNames = ['一','二','三','四','五','六','日'];
-    const today = t();
-    const statusColor = { '待完成':'#F59E0B','進行中':'#0EA5E9','完成':'#10B981' };
-
+    const dayNames   = ['一','二','三','四','五','六','日'];
+    const statColor  = { '待完成':'#F59E0B', '進行中':'#0EA5E9', '完成':'#10B981' };
+    const today      = t();
     let cells = '';
-    // 前置空格
-    for (let i = 0; i < startDow; i++) {
-      cells += `<div style="min-height:90px"></div>`;
-    }
-    // 日期格子
+    for (let i = 0; i < startDow; i++) cells += `<div style="min-height:90px"></div>`;
     for (let day = 1; day <= totalDays; day++) {
       const dateStr  = `${month}-${String(day).padStart(2,'0')}`;
       const dayTasks = byDate[dateStr] || [];
       const isToday  = dateStr === today;
-      cells += `
-        <div style="min-height:90px;background:${isToday?'var(--kitchen-section-head)':'var(--white)'};
-                    border:${isToday?'2px solid var(--kitchen-sidebar-accent)':'1px solid var(--kitchen-card-border)'};
-                    border-radius:var(--r-md);padding:8px;overflow:hidden">
-          <div style="font-size:12px;font-weight:${isToday?'700':'500'};
-                      color:${isToday?'var(--kitchen-sidebar-accent)':'var(--ink-700)'};
-                      margin-bottom:4px">${day}</div>
-          ${dayTasks.slice(0, 3).map(task => `
-            <div style="font-size:10px;padding:2px 5px;border-radius:3px;margin-bottom:2px;
-                        background:${statusColor[task.status]||'#94A3B8'}20;
-                        color:${statusColor[task.status]||'#94A3B8'};
-                        font-weight:500;overflow:hidden;white-space:nowrap;text-overflow:ellipsis;
-                        cursor:pointer"
-                 title="${task.content}"
-                 onclick="openTaskModal('${task.task_id}','${task.status}','${encodeURIComponent(task.note||'')}')">
-              ${task.content}
-            </div>`).join('')}
-          ${dayTasks.length > 3 ? `<div style="font-size:10px;color:var(--ink-400)">+${dayTasks.length-3} 項</div>` : ''}
-        </div>`;
+      cells += `<div style="min-height:90px;
+                  background:${isToday?'var(--kitchen-section-head)':'var(--white)'};
+                  border:${isToday?'2px solid var(--kitchen-sidebar-accent)':'1px solid var(--kitchen-card-border)'};
+                  border-radius:var(--r-md);padding:8px;overflow:hidden">
+        <div style="font-size:12px;font-weight:${isToday?'700':'500'};
+                    color:${isToday?'var(--kitchen-sidebar-accent)':'var(--ink-700)'};margin-bottom:4px">${day}</div>
+        ${dayTasks.slice(0,3).map(task=>`
+          <div style="font-size:10px;padding:2px 5px;border-radius:3px;margin-bottom:2px;cursor:pointer;
+                      background:${statColor[task.status]||'#94A3B8'}20;
+                      color:${statColor[task.status]||'#94A3B8'};font-weight:500;
+                      overflow:hidden;white-space:nowrap;text-overflow:ellipsis"
+               title="${task.content}"
+               onclick="openTaskModal('${task.task_id}','${task.status}','${encodeURIComponent(task.note||'')}')">
+            ${task.content}
+          </div>`).join('')}
+        ${dayTasks.length>3?`<div style="font-size:10px;color:var(--ink-400)">+${dayTasks.length-3} 項</div>`:''}
+      </div>`;
     }
-
     c.innerHTML = `
       <div style="background:var(--white);border:1px solid var(--kitchen-card-border);
                   border-radius:var(--r-lg);overflow:hidden;box-shadow:var(--shadow-sm)">
-        <!-- 月份標題 -->
         <div style="background:var(--kitchen-sidebar-bg);color:var(--white);
                     padding:14px 20px;font-size:16px;font-weight:700;text-align:center">
           ${y} 年 ${m} 月
         </div>
-        <!-- 星期標頭 -->
         <div style="display:grid;grid-template-columns:repeat(7,1fr);
                     background:var(--kitchen-section-head);border-bottom:1px solid var(--kitchen-card-border)">
           ${dayNames.map(d=>`<div style="text-align:center;padding:8px 4px;font-size:11px;
-                                font-weight:700;color:var(--amber-700)">${d}</div>`).join('')}
+                                         font-weight:700;color:var(--amber-700)">${d}</div>`).join('')}
         </div>
-        <!-- 日期格子 -->
-        <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;padding:8px">
-          ${cells}
-        </div>
+        <div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;padding:8px">${cells}</div>
       </div>
-
-      <!-- 圖例 -->
-      <div style="display:flex;gap:16px;margin-top:12px;font-size:12px;color:var(--ink-500);
-                  align-items:center;flex-wrap:wrap">
+      <div style="display:flex;gap:16px;margin-top:12px;font-size:12px;color:var(--ink-500);align-items:center;flex-wrap:wrap">
         <span style="font-weight:600">圖例：</span>
-        ${Object.entries(statusColor).map(([s,c])=>`
+        ${Object.entries(statColor).map(([s,c])=>`
           <span style="display:flex;align-items:center;gap:4px">
-            <span style="width:10px;height:10px;border-radius:2px;background:${c};display:inline-block"></span>
-            ${s}
+            <span style="width:10px;height:10px;border-radius:2px;background:${c};display:inline-block"></span>${s}
           </span>`).join('')}
       </div>
-
-      <!-- 任務 Modal（共用週計畫的） -->
       <div id="task-modal" style="display:none;position:fixed;inset:0;background:rgba(15,23,42,.5);
            z-index:9999;align-items:center;justify-content:center;backdrop-filter:blur(2px)">
         <div style="background:var(--white);border-radius:var(--r-xl);padding:28px;
@@ -749,9 +606,7 @@ window.loadMonthlyCal = async function() {
           <div class="field" style="margin-bottom:12px">
             <label>狀態</label>
             <select id="modal-status" style="padding:10px;border:1.5px solid var(--kitchen-card-border);border-radius:var(--r-md);font-size:14px">
-              <option value="待完成">待完成</option>
-              <option value="進行中">進行中</option>
-              <option value="完成">完成</option>
+              <option value="待完成">待完成</option><option value="進行中">進行中</option><option value="完成">完成</option>
             </select>
           </div>
           <div class="field" style="margin-bottom:16px">
@@ -771,27 +626,22 @@ window.loadMonthlyCal = async function() {
 };
 
 // ═══════════════════════════════════════════════════════════════
-// 廚房報廢記錄
+// 廚房報廢
 // ═══════════════════════════════════════════════════════════════
-async function renderWasteLog(el) {
+function renderWasteLog(el) {
   const ings = (KitchenApp.cache.ingredients||[]).filter(i =>
     String(i.in_inventory).toUpperCase() === 'TRUE');
-
   el.innerHTML = `
     <div class="section-title" style="margin-bottom:16px"><i class="ti ti-trash"></i>新增報廢記錄</div>
     <div class="card card--kitchen" style="margin-bottom:24px">
       <div class="alert-row alert-row--warning" style="margin-bottom:16px">
         <i class="ti ti-info-circle alert-row__icon"></i>
-        <div class="alert-row__body">
-          <strong>報廢會自動扣除庫存</strong>
-          <span>填寫後系統會同時在庫存異動表記錄出庫（耗損）</span>
-        </div>
+        <div class="alert-row__body"><strong>報廢會自動扣除庫存</strong>
+          <span>系統同時在庫存異動表記錄耗損</span></div>
       </div>
       <form id="waste-form" novalidate>
         <div class="fg fg3" style="margin-bottom:12px">
-          <div class="field"><label>日期</label>
-            <input type="date" name="date" value="${t()}">
-          </div>
+          <div class="field"><label>日期</label><input type="date" name="date" value="${t()}"></div>
           <div class="field"><label>品項 *</label>
             <select name="item_id" id="waste-item">
               <option value="">請選擇…</option>
@@ -820,9 +670,7 @@ async function renderWasteLog(el) {
                 .map(n=>`<option value="${n.trim()}">${n.trim()}</option>`).join('')}
             </select>
           </div>
-          <div class="field"><label>備註說明</label>
-            <input type="text" name="note" placeholder="選填">
-          </div>
+          <div class="field"><label>備註</label><input type="text" name="note" placeholder="選填"></div>
         </div>
         <div class="btn-row">
           <button type="submit" class="btn btn--kitchen" id="btn-waste">
@@ -831,9 +679,8 @@ async function renderWasteLog(el) {
         </div>
       </form>
     </div>
-
     <div class="section-header" style="margin-bottom:12px">
-      <div class="section-title"><i class="ti ti-history"></i>報廢記錄</div>
+      <div class="section-title"><i class="ti ti-history"></i>報廢記錄查詢</div>
       <div style="display:flex;gap:8px">
         <input type="date" id="waste-date" value="${t()}"
                style="padding:6px 10px;border:1.5px solid var(--kitchen-card-border);
@@ -844,13 +691,6 @@ async function renderWasteLog(el) {
       </div>
     </div>
     <div class="card card--kitchen" id="waste-list">${spinHTML()}</div>`;
-
-  // 品項選擇時帶入名稱和單位
-  $('waste-item')?.addEventListener('change', function() {
-    const opt = this.selectedOptions[0];
-    $('waste-form').querySelector('[name="item_id"]').dataset.name = opt?.dataset?.name || '';
-    $('waste-form').querySelector('[name="item_id"]').dataset.unit = opt?.dataset?.unit || '';
-  });
 
   $('waste-form').addEventListener('submit', async (e) => {
     e.preventDefault();
@@ -870,7 +710,6 @@ async function renderWasteLog(el) {
     } catch(err) { UI.toast(err.message, 'error'); }
     finally { UI.btnLoad(btn, false); }
   });
-
   loadWasteLogs();
 }
 
@@ -892,9 +731,185 @@ window.loadWasteLogs = async function() {
         <td>${r.recorder||'—'}</td>
         <td class="td-muted">${r.note||'—'}</td>
       </tr>`).join('')}</tbody>
-    </table></div>
-    <div style="padding:10px 14px;font-size:12px;color:var(--ink-500);border-top:1px solid var(--kitchen-card-border)">
-      共 ${rows.length} 筆報廢記錄
-    </div>`;
+    </table></div>`;
   } catch(e) { c.innerHTML = errHTML(e); }
 };
+
+// ═══════════════════════════════════════════════════════════════
+// 庫存管理
+// ═══════════════════════════════════════════════════════════════
+function renderInventory(el) {
+  const ings = (KitchenApp.cache.ingredients||[]).filter(i =>
+    String(i.in_inventory).toUpperCase() === 'TRUE');
+  el.innerHTML = `
+    <div class="grid g2-1" style="gap:20px">
+      <div>
+        <div class="section-title mb-16" style="margin-bottom:12px">
+          <i class="ti ti-package"></i>目前庫存
+        </div>
+        <div class="card card--kitchen" id="k-inv-overview">${spinHTML()}</div>
+      </div>
+      <div>
+        <div class="section-title mb-16" style="margin-bottom:12px">
+          <i class="ti ti-arrows-transfer-up"></i>入庫 / 出庫
+        </div>
+        <div class="card card--kitchen">
+          <form id="k-inv-form" novalidate>
+            <div class="fg" style="gap:12px">
+              <div class="field"><label>日期</label><input type="date" name="date" value="${t()}"></div>
+              <div class="field"><label>類型</label>
+                <select name="type">
+                  <option value="in">入庫</option>
+                  <option value="out">出庫（廚房使用）</option>
+                </select>
+              </div>
+              <div class="field"><label>品項</label>
+                <select name="item_id" id="k-inv-item">
+                  <option value="">請選擇…</option>
+                  ${ings.map(i=>`<option value="${i.ingredient_id}" data-unit="${i.unit}">
+                    ${i.ingredient_name}（${i.unit}）</option>`).join('')}
+                </select>
+              </div>
+              <div class="field"><label>數量</label>
+                <input type="number" name="qty" min="0.1" step="0.1" value="1">
+              </div>
+              <div class="field"><label>備註</label>
+                <input type="text" name="note" placeholder="例：早市採購">
+              </div>
+            </div>
+            <div class="btn-row">
+              <button type="submit" class="btn btn--kitchen" id="btn-k-inv">
+                <i class="ti ti-device-floppy"></i>儲存
+              </button>
+            </div>
+          </form>
+        </div>
+      </div>
+    </div>`;
+  loadKitchenInv();
+  $('k-inv-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const data = UI.formData(e.target);
+    if (!data.item_id) { UI.toast('請選擇品項', 'error'); return; }
+    const opt = $('k-inv-item').selectedOptions[0];
+    data.item_name = opt?.text?.split('（')[0] || '';
+    data.unit      = opt?.dataset?.unit || '';
+    data.unit_price = 0;
+    const btn = $('btn-k-inv');
+    UI.btnLoad(btn, true);
+    try {
+      await API.saveInventoryLog(data);
+      UI.toast('✓ 已儲存');
+      UI.resetForm(e.target);
+      e.target.querySelector('[name="date"]').value = t();
+      loadKitchenInv();
+    } catch(err) { UI.toast(err.message, 'error'); }
+    finally { UI.btnLoad(btn, false); }
+  });
+}
+
+async function loadKitchenInv() {
+  const ov = $('k-inv-overview'); if (!ov) return;
+  try {
+    const res   = await API.getInventory();
+    const items = res.data || [];
+    ov.innerHTML = items.map(item => {
+      const pct = Math.min(100, Math.round(item.current_stock/item.min_stock*100));
+      const cls = item.is_low ? 'low' : pct < 60 ? 'warn' : '';
+      return `<div class="stock-item">
+        <div class="stock-item__header">
+          <span class="stock-item__name">${item.item_name}</span>
+          <span class="stock-item__qty ${item.is_low?'low':''}">
+            ${fn(item.current_stock)} / ${fn(item.min_stock)} ${item.unit}${item.is_low?' ⚠':''}
+          </span>
+        </div>
+        <div class="stock-bar">
+          <div class="stock-bar__fill ${cls}" style="width:${pct}%"></div>
+        </div>
+      </div>`;
+    }).join('') || '<div class="empty" style="padding:16px"><p>無庫存資料</p></div>';
+  } catch(e) { if (ov) ov.innerHTML = errHTML(e); }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 成本輸入
+// ═══════════════════════════════════════════════════════════════
+function renderCostInput(el) {
+  el.innerHTML = `
+    <div class="section-title mb-16" style="margin-bottom:16px">
+      <i class="ti ti-receipt"></i>今日成本輸入
+    </div>
+    <div class="card card--kitchen" style="max-width:560px">
+      <div class="alert-row alert-row--warning" style="margin-bottom:16px">
+        <i class="ti ti-info-circle alert-row__icon"></i>
+        <div class="alert-row__body"><strong>說明</strong>
+          <span>請輸入廚房今日實際成本。損益計算由老闆後台負責。</span></div>
+      </div>
+      <form id="cost-form" novalidate>
+        <div class="fg fg3" style="margin-bottom:14px">
+          <div class="field"><label>日期</label><input type="date" name="date" value="${t()}"></div>
+          <div class="field"><label>成本類型</label>
+            <select name="type">
+              <option value="labor">廚房人事費</option>
+              <option value="driver">司機費用</option>
+              <option value="ingredient">食材採購</option>
+              <option value="other">其他</option>
+            </select>
+          </div>
+          <div class="field"><label>金額 ($)</label>
+            <input type="number" name="amount" min="0" value="0" required>
+          </div>
+        </div>
+        <div class="field" style="margin-bottom:14px">
+          <label>備註說明</label>
+          <input type="text" name="note" placeholder="例：今日阿明加班費">
+        </div>
+        <div class="btn-row">
+          <button type="submit" class="btn btn--kitchen" id="btn-cost">
+            <i class="ti ti-device-floppy"></i>送出成本記錄
+          </button>
+        </div>
+      </form>
+    </div>
+    <div id="cost-today-list" style="margin-top:20px"></div>`;
+
+  $('cost-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const data = UI.formData(e.target);
+    const btn  = $('btn-cost');
+    if (!data.amount) { UI.toast('請填入金額', 'error'); return; }
+    UI.btnLoad(btn, true);
+    try {
+      await API.saveKitchenCost(data);
+      UI.toast('✓ 成本已送出');
+      UI.resetForm(e.target);
+      e.target.querySelector('[name="date"]').value = t();
+      loadTodayCosts();
+    } catch(err) { UI.toast(err.message, 'error'); }
+    finally { UI.btnLoad(btn, false); }
+  });
+  loadTodayCosts();
+}
+
+async function loadTodayCosts() {
+  const c = $('cost-today-list'); if (!c) return;
+  try {
+    const res  = await API.getKitchenCosts(t());
+    const rows = res.data || [];
+    if (!rows.length) { c.innerHTML = ''; return; }
+    c.innerHTML = `
+      <div class="section-title mb-16" style="margin-bottom:12px">
+        <i class="ti ti-list"></i>今日已輸入成本
+      </div>
+      <div class="card card--kitchen">
+        <div class="table-wrap table-wrap--kitchen"><table>
+          <thead><tr><th>類型</th><th>金額</th><th>備註</th></tr></thead>
+          <tbody>${rows.map(r=>`<tr>
+            <td><span class="badge badge--gray">${r.type}</span></td>
+            <td class="td-num">${UI.fmtMoney(r.amount)}</td>
+            <td class="td-muted">${r.note||'—'}</td>
+          </tr>`).join('')}</tbody>
+        </table></div>
+      </div>`;
+  } catch(e) { c.innerHTML = errHTML(e); }
+}
