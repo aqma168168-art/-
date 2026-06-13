@@ -62,9 +62,29 @@
           </div>
           <div class="field field--stall">
             <label>賣完時間 <span style="color:var(--red-500)">*</span></label>
-            <select name="sold_out_time" id="s-soldout" required>
-              <option value="">選時間…</option>
-            </select>
+            <div style="position:relative">
+              <input type="text" name="sold_out_time" id="s-soldout"
+                     placeholder="輸入時間，如 1430"
+                     maxlength="5"
+                     inputmode="numeric"
+                     autocomplete="off"
+                     required
+                     style="padding:13px 14px;font-size:18px;font-weight:700;
+                            border:2px solid var(--stall-card-border);
+                            border-radius:var(--r-lg);width:100%;
+                            letter-spacing:2px;font-family:var(--font-num);
+                            color:var(--ink-950);outline:none;
+                            -webkit-appearance:none;background:#FAFEFF">
+              <span id="soldout-hint"
+                    style="position:absolute;right:12px;top:50%;transform:translateY(-50%);
+                           font-size:11px;color:var(--stall-accent-dark);
+                           opacity:.6;pointer-events:none">
+                例：1430
+              </span>
+            </div>
+            <p style="font-size:11px;color:var(--stall-accent-dark);opacity:.7;margin-top:4px">
+              輸入 4 位數字自動轉換，例如 1430 → 14:30
+            </p>
           </div>
         </div>
         <!-- 大碗 / 小碗 -->

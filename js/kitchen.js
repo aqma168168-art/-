@@ -150,29 +150,29 @@ function renderNewDispatch(el) {
 
         <div class="form-section">
           <div class="form-section__title"><i class="ti ti-droplet"></i>底料配發</div>
-          <div class="fg fg3">${sz.map(s=>`<div class="field"><label>底料（${s}）</label><input type="number" name="base_${s==='大'?'L':s==='中'?'M':'S'}" min="0" value="0"></div>`).join('')}</div>
+          <div class="fg fg3">${sz.map(s=>`<div class="field"><label>底料（${s}）</label><input type="number" name="base_${s==='大'?'L':s==='中'?'M':'S'}" min="0" step="0.5" value="0"></div>`).join('')}</div>
         </div>
 
         <div class="form-section">
           <div class="form-section__title"><i class="ti ti-grain"></i>米配發</div>
-          <div class="fg fg3">${sz.map(s=>`<div class="field"><label>米（${s}）</label><input type="number" name="rice_${s==='大'?'L':s==='中'?'M':'S'}" min="0" value="0"></div>`).join('')}</div>
+          <div class="fg fg3">${sz.map(s=>`<div class="field"><label>米（${s}）</label><input type="number" name="rice_${s==='大'?'L':s==='中'?'M':'S'}" min="0" step="0.5" value="0"></div>`).join('')}</div>
         </div>
 
         <div class="form-section">
           <div class="form-section__title"><i class="ti ti-plant"></i>芋頭 / 芋泥</div>
           <div class="fg fg4">
-            ${sz.map(s=>`<div class="field"><label>芋頭（${s}）</label><input type="number" name="taro_${s==='大'?'L':s==='中'?'M':'S'}" min="0" value="0"></div>`).join('')}
-            <div class="field"><label>芋泥（包）</label><input type="number" name="taro_paste" min="0" value="0"></div>
+            ${sz.map(s=>`<div class="field"><label>芋頭（${s}）</label><input type="number" name="taro_${s==='大'?'L':s==='中'?'M':'S'}" min="0" step="0.5" value="0"></div>`).join('')}
+            <div class="field"><label>芋泥（包）</label><input type="number" name="taro_paste" min="0" step="0.5" value="0"></div>
           </div>
         </div>
 
         <div class="form-section">
           <div class="form-section__title"><i class="ti ti-egg"></i>其他配料</div>
           <div class="fg fg4">
-            <div class="field"><label>碎皮蛋（碗）</label><input type="number" name="broken_egg" min="0" value="0"></div>
-            <div class="field"><label>完整皮蛋（碗）</label><input type="number" name="whole_egg" min="0" value="0"></div>
-            <div class="field"><label>芹菜（碗）</label><input type="number" name="celery" min="0" value="0"></div>
-            <div class="field"><label>菜脯（碗）</label><input type="number" name="pickled_radish" min="0" value="0"></div>
+            <div class="field"><label>碎皮蛋（碗）</label><input type="number" name="broken_egg" min="0" step="0.5" value="0"></div>
+            <div class="field"><label>完整皮蛋（碗）</label><input type="number" name="whole_egg" min="0" step="0.5" value="0"></div>
+            <div class="field"><label>芹菜（碗）</label><input type="number" name="celery" min="0" step="0.5" value="0"></div>
+            <div class="field"><label>菜脯（碗）</label><input type="number" name="pickled_radish" min="0" step="0.5" value="0"></div>
           </div>
         </div>
 

@@ -64,16 +64,26 @@ function buildForm(opts) {
     repSel.appendChild(o);
   });
 
-  // 賣完時間
-  const timeSel = document.getElementById('s-soldout');
-  timeSel.innerHTML = `<option value="">選時間…</option>` + makeOptions(opts.soldOutTimes);
+  // 賣完時間：自由輸入，自動格式化
+  const timeInput = document.getElementById('s-soldout');
+  if (timeInput) {
+    timeInput.addEventListener('input', formatTimeInput);
+    timeInput.addEventListener('blur',  validateTimeInput);
+    // focus 時清除提示
+    timeInput.addEventListener('focus', () => {
+      document.getElementById('soldout-hint').style.display = 'none';
+    });
+  }
 
-  // 桶數（1 到 maxBarrels）
+  // 桶數（0.5 間距，從 0.5 到 maxBarrels）
   const barrelSel = document.getElementById('s-barrels');
-  barrelSel.innerHTML = `<option value="">選桶數…</option>` +
-    Array.from({ length: opts.maxBarrels }, (_, i) =>
-      `<option value="${i+1}">${i+1} 桶</option>`
-    ).join('');
+  barrelSel.innerHTML = `<option value="">選桶數…</option>`;
+  let b = 0.5;
+  while (b <= opts.maxBarrels) {
+    const label = Number.isInteger(b) ? `${b} 桶` : `${b} 桶（半桶）`;
+    barrelSel.innerHTML += `<option value="${b}">${label}</option>`;
+    b = Math.round((b + 0.5) * 10) / 10; // 避免浮點誤差
+  }
 
   // 所有剩料選單（0 到 maxRemainder）
   const remOpts = remOptions(opts.maxRemainder);
@@ -82,17 +92,73 @@ function buildForm(opts) {
   });
 }
 
+// ── 時間自動格式化 ────────────────────────────────────────────
+// 使用者輸入 1430 → 自動轉成 14:30
+// 使用者輸入 930  → 轉成 09:30
+function formatTimeInput(e) {
+  const input = e.target;
+  // 只保留數字
+  let raw = input.value.replace(/\D/g, '');
+
+  // 移除舊的冒號再重算
+  if (raw.length >= 4) {
+    const hh = raw.slice(0, 2);
+    const mm = raw.slice(2, 4);
+    input.value = `${hh}:${mm}`;
+  } else if (raw.length === 3) {
+    // 輸入 3 碼時先顯示原始，等第 4 碼
+    input.value = raw;
+  } else {
+    input.value = raw;
+  }
+
+  // 格式完成後更新 hint
+  const hint = document.getElementById('soldout-hint');
+  if (hint) hint.style.display = raw.length > 0 ? 'none' : '';
+}
+
+function validateTimeInput(e) {
+  const input = e.target;
+  const raw = input.value.replace(/\D/g, '');
+  if (!raw) return;
+
+  // 補齊 3 碼情況，例如 930 → 09:30
+  let digits = raw.padStart(4, '0');
+  const hh = parseInt(digits.slice(0, 2));
+  const mm = parseInt(digits.slice(2, 4));
+
+  if (hh >= 0 && hh <= 23 && mm >= 0 && mm <= 59) {
+    input.value = `${String(hh).padStart(2,'0')}:${String(mm).padStart(2,'0')}`;
+    input.style.borderColor = 'var(--stall-accent)';
+  } else {
+    // 格式錯誤，清空讓使用者重填
+    input.value = '';
+    input.placeholder = '格式錯誤，請重新輸入（如 1430）';
+    input.style.borderColor = 'var(--red-500)';
+    UI.toast('時間格式錯誤，請輸入如 1430 代表 14:30', 'error', 3000);
+  }
+}
+
 // ── 送出回報 ──────────────────────────────────────────────────
 async function submitStallReport() {
   const stall_id  = document.getElementById('s-stall').value;
   const reporter  = document.getElementById('s-reporter').value;
   const barrels   = document.getElementById('s-barrels').value;
-  const soldout   = document.getElementById('s-soldout').value;
+  const soldout   = document.getElementById('s-soldout').value.trim();
 
-  if (!stall_id) { UI.toast('請選擇攤位', 'error');   return; }
-  if (!reporter) { UI.toast('請選擇回報人', 'error'); return; }
-  if (!barrels)  { UI.toast('請選擇今日桶數', 'error'); return; }
-  if (!soldout)  { UI.toast('請選擇賣完時間', 'error'); return; }
+  if (!stall_id) { UI.toast('請選擇攤位', 'error');          return; }
+  if (!reporter) { UI.toast('請選擇回報人', 'error');        return; }
+  if (!barrels)  { UI.toast('請選擇今日桶數', 'error');      return; }
+  if (!soldout)  { UI.toast('請填入賣完時間', 'error');
+    document.getElementById('s-soldout').focus();            return; }
+
+  // 確保時間格式正確（含冒號）
+  const timeRegex = /^\d{1,2}:\d{2}$/;
+  if (!timeRegex.test(soldout)) {
+    UI.toast('時間格式錯誤，請輸入如 1430', 'error');
+    document.getElementById('s-soldout').focus();
+    return;
+  }
 
   const stall = (StallApp.opts?.stalls||[]).find(s => s.stall_id === stall_id);
   const form  = document.getElementById('stall-form');
