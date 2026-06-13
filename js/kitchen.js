@@ -3,8 +3,17 @@
 // ============================================================
 
 const KitchenApp = {
-  page: 'dispatch',
-  cache: { settings: null, stalls: null, ingredients: null },
+  page:  'dispatch',
+  cache: {
+    settings:        null,
+    stalls:          null,
+    ingredients:     null,
+    dispatchers:     [],
+    todayDispatches: [],   // 首頁直接用，不需再抓
+    inventory:       [],
+    lowStock:        [],
+    initDate:        null, // 快取對應的日期
+  },
 };
 
 const K_TITLES = {
@@ -19,26 +28,41 @@ const K_TITLES = {
   'cost-input':  '成本輸入',
 };
 
-// ── 初始化 ────────────────────────────────────────────────────
+// ── 初始化：一次 API 搞定所有設定 ────────────────────────────
 document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('topbar-date').textContent =
-    new Date().toLocaleDateString('zh-TW', { year:'numeric', month:'long', day:'numeric', weekday:'short' });
+    new Date().toLocaleDateString('zh-TW', {
+      year:'numeric', month:'long', day:'numeric', weekday:'short'
+    });
 
-  UI.showLoading('載入設定…');
+  const badge = document.getElementById('conn-badge');
+  UI.showLoading('載入廚房資料…');
   try {
-    const [sr, stR, ingR] = await Promise.all([
-      API.getSettings(), API.getStalls(), API.getIngredients()
-    ]);
-    KitchenApp.cache.settings    = sr.data;
-    KitchenApp.cache.stalls      = stR.data;
-    KitchenApp.cache.ingredients = ingR.data;
-    const b = document.getElementById('conn-badge');
-    if (b) { b.textContent = '已連線'; b.className = 'badge badge--green'; }
+    // 一次 API：設定 + 攤位 + 配料 + 今日配發 + 庫存
+    const res = await API.getKitchenInit(t());
+    const d   = res.data;
+
+    KitchenApp.cache.settings        = d.settings;
+    KitchenApp.cache.stalls          = d.stalls;
+    KitchenApp.cache.ingredients     = d.ingredients;
+    KitchenApp.cache.dispatchers     = d.dispatchers || [];
+    KitchenApp.cache.todayDispatches = d.todayDispatches || [];
+    KitchenApp.cache.inventory       = d.inventory || [];
+    KitchenApp.cache.lowStock        = d.lowStock || [];
+    KitchenApp.cache.initDate        = d.date;
+
+    if (badge) { badge.textContent = '已連線'; badge.className = 'badge badge--green'; }
+
+    // 低庫存警示
+    if (d.lowStock.length > 0) {
+      UI.toast(`⚠ ${d.lowStock.length} 項庫存低於安全庫存`, 'info', 5000);
+    }
   } catch(e) {
     UI.toast('無法載入設定：' + e.message, 'error', 6000);
-    const b = document.getElementById('conn-badge');
-    if (b) { b.textContent = '連線失敗'; b.className = 'badge badge--red'; }
-  } finally { UI.hideLoading(); }
+    if (badge) { badge.textContent = '連線失敗'; badge.className = 'badge badge--red'; }
+  } finally {
+    UI.hideLoading();
+  }
 
   document.querySelectorAll('.nav-item[data-page]').forEach(el =>
     el.addEventListener('click', () => showPage(el.dataset.page)));
@@ -101,18 +125,24 @@ function renderDispatchList(el) {
       </div>
     </div>
     <div id="disp-list">${spinHTML()}</div>`;
-  loadDispatchList();
+
+  // 若快取日期 = 今日，直接渲染快取，不發 API
+  const today = t();
+  if (KitchenApp.cache.initDate === today && KitchenApp.cache.todayDispatches.length >= 0) {
+    renderDispatchRows($('disp-list'), KitchenApp.cache.todayDispatches);
+  } else {
+    loadDispatchList();
+  }
 }
 
-window.loadDispatchList = async function() {
-  const date = $('disp-date')?.value || t();
-  const c = $('disp-list'); if (!c) return;
-  c.innerHTML = spinHTML();
-  try {
-    const res  = await API.getDispatches(date);
-    const rows = res.data || [];
-    if (!rows.length) { c.innerHTML = `<div class="card card--kitchen">${noDataHTML()}</div>`; return; }
-    c.innerHTML = `<div class="card card--kitchen"><div class="table-wrap table-wrap--kitchen"><table>
+// 渲染配發記錄表格（共用，避免重複代碼）
+function renderDispatchRows(container, rows) {
+  if (!rows.length) {
+    container.innerHTML = `<div class="card card--kitchen">${noDataHTML()}</div>`;
+    return;
+  }
+  container.innerHTML = `<div class="card card--kitchen">
+    <div class="table-wrap table-wrap--kitchen"><table>
       <thead><tr>
         <th>攤位</th><th>配發人</th>
         <th>底料 大/中/小</th><th>米 大/中/小</th><th>芋頭 大/中/小</th>
@@ -132,6 +162,21 @@ window.loadDispatchList = async function() {
         <td class="td-muted">${r.note||'—'}</td>
       </tr>`).join('')}</tbody>
     </table></div></div>`;
+}
+
+window.loadDispatchList = async function() {
+  const date = $('disp-date')?.value || t();
+  const c    = $('disp-list'); if (!c) return;
+  c.innerHTML = spinHTML();
+  try {
+    const res  = await API.getDispatches(date);
+    const rows = res.data || [];
+    // 若是今日，更新快取
+    if (date === t()) {
+      KitchenApp.cache.todayDispatches = rows;
+      KitchenApp.cache.initDate        = date;
+    }
+    renderDispatchRows(c, rows);
   } catch(e) { c.innerHTML = errHTML(e); }
 };
 
@@ -161,8 +206,10 @@ function renderNewDispatch(el) {
             </div>
             <div class="field"><label>配發人</label>
               <select name="dispatcher">
-                ${(KitchenApp.cache.settings?.['配發人清單']||'阿明,阿華,阿成,其他').split(',')
-                  .map(n=>`<option value="${n.trim()}">${n.trim()}</option>`).join('')}
+                ${(KitchenApp.cache.dispatchers.length
+                    ? KitchenApp.cache.dispatchers
+                    : ['阿明','阿華','阿成','其他'])
+                  .map(n=>`<option value="${n}">${n}</option>`).join('')}
               </select>
             </div>
           </div>
@@ -230,6 +277,10 @@ function renderNewDispatch(el) {
       UI.toast(`✓ ${data.stall_name} 配發記錄已儲存`);
       UI.resetForm(e.target);
       e.target.querySelector('[name="date"]').value = t();
+      // 若是今日配發，更新快取
+      if (data.date === t()) {
+        KitchenApp.cache.todayDispatches.push(data);
+      }
     } catch(err) { UI.toast(err.message, 'error'); }
     finally { UI.btnLoad(btn, false); }
   });
@@ -747,7 +798,9 @@ function renderInventory(el) {
         <div class="section-title mb-16" style="margin-bottom:12px">
           <i class="ti ti-package"></i>目前庫存
         </div>
-        <div class="card card--kitchen" id="k-inv-overview">${spinHTML()}</div>
+        <div class="card card--kitchen" id="k-inv-overview">
+          ${renderInventoryList(KitchenApp.cache.inventory)}
+        </div>
       </div>
       <div>
         <div class="section-title mb-16" style="margin-bottom:12px">
@@ -786,14 +839,14 @@ function renderInventory(el) {
         </div>
       </div>
     </div>`;
-  loadKitchenInv();
+
   $('k-inv-form').addEventListener('submit', async (e) => {
     e.preventDefault();
     const data = UI.formData(e.target);
     if (!data.item_id) { UI.toast('請選擇品項', 'error'); return; }
     const opt = $('k-inv-item').selectedOptions[0];
-    data.item_name = opt?.text?.split('（')[0] || '';
-    data.unit      = opt?.dataset?.unit || '';
+    data.item_name  = opt?.text?.split('（')[0] || '';
+    data.unit       = opt?.dataset?.unit || '';
     data.unit_price = 0;
     const btn = $('btn-k-inv');
     UI.btnLoad(btn, true);
@@ -802,33 +855,41 @@ function renderInventory(el) {
       UI.toast('✓ 已儲存');
       UI.resetForm(e.target);
       e.target.querySelector('[name="date"]').value = t();
-      loadKitchenInv();
+      // 儲存後重新抓庫存更新快取
+      await refreshInventoryCache();
     } catch(err) { UI.toast(err.message, 'error'); }
     finally { UI.btnLoad(btn, false); }
   });
 }
 
-async function loadKitchenInv() {
-  const ov = $('k-inv-overview'); if (!ov) return;
+function renderInventoryList(items) {
+  if (!items || !items.length) return '<div class="empty" style="padding:16px"><p>無庫存資料</p></div>';
+  return items.map(item => {
+    const pct = Math.min(100, Math.round(item.current_stock/item.min_stock*100));
+    const cls = item.is_low ? 'low' : pct < 60 ? 'warn' : '';
+    return `<div class="stock-item">
+      <div class="stock-item__header">
+        <span class="stock-item__name">${item.item_name}</span>
+        <span class="stock-item__qty ${item.is_low?'low':''}">
+          ${fn(item.current_stock)} / ${fn(item.min_stock)} ${item.unit}${item.is_low?' ⚠':''}
+        </span>
+      </div>
+      <div class="stock-bar">
+        <div class="stock-bar__fill ${cls}" style="width:${pct}%"></div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+async function refreshInventoryCache() {
   try {
-    const res   = await API.getInventory();
-    const items = res.data || [];
-    ov.innerHTML = items.map(item => {
-      const pct = Math.min(100, Math.round(item.current_stock/item.min_stock*100));
-      const cls = item.is_low ? 'low' : pct < 60 ? 'warn' : '';
-      return `<div class="stock-item">
-        <div class="stock-item__header">
-          <span class="stock-item__name">${item.item_name}</span>
-          <span class="stock-item__qty ${item.is_low?'low':''}">
-            ${fn(item.current_stock)} / ${fn(item.min_stock)} ${item.unit}${item.is_low?' ⚠':''}
-          </span>
-        </div>
-        <div class="stock-bar">
-          <div class="stock-bar__fill ${cls}" style="width:${pct}%"></div>
-        </div>
-      </div>`;
-    }).join('') || '<div class="empty" style="padding:16px"><p>無庫存資料</p></div>';
-  } catch(e) { if (ov) ov.innerHTML = errHTML(e); }
+    const res = await API.getInventory();
+    KitchenApp.cache.inventory = res.data || [];
+    KitchenApp.cache.lowStock  = KitchenApp.cache.inventory.filter(i => i.is_low);
+    // 更新畫面上的庫存列表
+    const ov = $('k-inv-overview');
+    if (ov) ov.innerHTML = renderInventoryList(KitchenApp.cache.inventory);
+  } catch(e) { /* 靜默失敗，不影響主流程 */ }
 }
 
 // ═══════════════════════════════════════════════════════════════
