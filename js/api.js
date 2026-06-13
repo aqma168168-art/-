@@ -66,6 +66,10 @@ const API = (() => {
     return call('getKitchenInit', { date });
   }
 
+  // 工作項目庫 & 新增週計畫任務
+  async function getTaskLibrary()    { return call('getTaskLibrary'); }
+  async function saveWeeklyTask(data){ return call('saveWeeklyTask', {}, data); }
+
   // 週計畫
   async function getWeeklyPlan(week, month) { return call('getWeeklyPlan', { week, month }); }
   async function saveWeeklyPlanStatus(data)  { return call('saveWeeklyPlanStatus', {}, data); }
@@ -87,6 +91,7 @@ const API = (() => {
     getOwnerDashboard,
     getKitchenInit,
     getStallFormOptions,
+    getTaskLibrary, saveWeeklyTask,
     getWeeklyPlan, saveWeeklyPlanStatus,
     getWasteLogs,  saveWasteLog,
     getSettings, getStalls, getIngredients,

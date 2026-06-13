@@ -9,10 +9,11 @@ const KitchenApp = {
     stalls:          null,
     ingredients:     null,
     dispatchers:     [],
-    todayDispatches: [],   // 首頁直接用，不需再抓
+    taskLibrary:     [],   // 工作項目庫
+    todayDispatches: [],
     inventory:       [],
     lowStock:        [],
-    initDate:        null, // 快取對應的日期
+    initDate:        null,
   },
 };
 
@@ -46,6 +47,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     KitchenApp.cache.stalls          = d.stalls;
     KitchenApp.cache.ingredients     = d.ingredients;
     KitchenApp.cache.dispatchers     = d.dispatchers || [];
+    KitchenApp.cache.taskLibrary     = d.taskLibrary || [];
     KitchenApp.cache.todayDispatches = d.todayDispatches || [];
     KitchenApp.cache.inventory       = d.inventory || [];
     KitchenApp.cache.lowStock        = d.lowStock || [];
@@ -422,11 +424,231 @@ function renderWeeklyPlan(el) {
         <button class="btn btn--kitchen btn--sm" onclick="loadWeeklyPlan()">
           <i class="ti ti-refresh"></i> 切換
         </button>
+        <button class="btn btn--kitchen btn--sm" onclick="openAddTaskModal()">
+          <i class="ti ti-plus"></i> 新增任務
+        </button>
       </div>
     </div>
-    <div id="weekly-content">${spinHTML()}</div>`;
+    <div id="weekly-content">${spinHTML()}</div>
+
+    <!-- 新增任務 Modal -->
+    <div id="add-task-modal" style="display:none;position:fixed;inset:0;
+         background:rgba(15,23,42,.5);z-index:9999;align-items:center;
+         justify-content:center;backdrop-filter:blur(2px)">
+      <div style="background:var(--white);border-radius:var(--r-xl);padding:28px;
+                  width:92%;max-width:480px;box-shadow:var(--shadow-lg)">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+          <div style="font-size:17px;font-weight:700;color:var(--ink-900)">
+            <i class="ti ti-plus" style="color:var(--kitchen-sidebar-accent)"></i> 新增任務
+          </div>
+          <button onclick="closeAddTaskModal()"
+                  style="background:none;border:none;font-size:20px;color:var(--ink-400);cursor:pointer">✕</button>
+        </div>
+
+        <form id="add-task-form" novalidate>
+          <!-- 工作內容：下拉選單 + 自由輸入切換 -->
+          <div class="field" style="margin-bottom:14px">
+            <label style="color:var(--ink-700)">工作內容 *</label>
+            <div style="display:flex;gap:6px">
+              <select id="task-content-select"
+                      style="flex:1;padding:9px 12px;border:1.5px solid var(--kitchen-card-border);
+                             border-radius:var(--r-md);font-size:13px;outline:none;background:var(--white)"
+                      onchange="onTaskContentSelect(this)">
+                <option value="">── 從項目庫選擇 ──</option>
+                ${buildTaskLibraryOptions()}
+                <option value="__custom__">✏️ 自行輸入…</option>
+              </select>
+            </div>
+            <input type="text" id="task-content-input" name="content"
+                   placeholder="請輸入工作內容"
+                   style="display:none;margin-top:6px;width:100%;padding:9px 12px;
+                          border:1.5px solid var(--kitchen-sidebar-accent);
+                          border-radius:var(--r-md);font-size:13px;outline:none">
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
+            <div class="field">
+              <label style="color:var(--ink-700)">日期 *</label>
+              <input type="date" name="date" id="task-date" value="${t()}"
+                     style="padding:9px 12px;border:1.5px solid var(--kitchen-card-border);
+                            border-radius:var(--r-md);font-size:13px;outline:none;width:100%">
+            </div>
+            <div class="field">
+              <label style="color:var(--ink-700)">任務類型</label>
+              <select name="type" id="task-type"
+                      style="padding:9px 12px;border:1.5px solid var(--kitchen-card-border);
+                             border-radius:var(--r-md);font-size:13px;outline:none;background:var(--white)">
+                <option value="備料">備料</option>
+                <option value="清潔">清潔</option>
+                <option value="採購">採購</option>
+                <option value="配送">配送</option>
+                <option value="庫存">庫存</option>
+                <option value="設備">設備</option>
+                <option value="其他">其他</option>
+              </select>
+            </div>
+          </div>
+
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
+            <div class="field">
+              <label style="color:var(--ink-700)">負責人</label>
+              <select name="assignee"
+                      style="padding:9px 12px;border:1.5px solid var(--kitchen-card-border);
+                             border-radius:var(--r-md);font-size:13px;outline:none;background:var(--white)">
+                <option value="">不指定</option>
+                ${(KitchenApp.cache.dispatchers||[])
+                  .map(n=>`<option value="${n}">${n}</option>`).join('')}
+              </select>
+            </div>
+            <div class="field">
+              <label style="color:var(--ink-700)">優先級</label>
+              <select name="priority"
+                      style="padding:9px 12px;border:1.5px solid var(--kitchen-card-border);
+                             border-radius:var(--r-md);font-size:13px;outline:none;background:var(--white)">
+                <option value="高">🔴 高</option>
+                <option value="中" selected>🟡 中</option>
+                <option value="低">⚪ 低</option>
+              </select>
+            </div>
+          </div>
+
+          <div style="display:flex;gap:8px;justify-content:flex-end;padding-top:8px">
+            <button type="button" class="btn btn--sm" onclick="closeAddTaskModal()">取消</button>
+            <button type="submit" class="btn btn--kitchen btn--sm" id="btn-add-task">
+              <i class="ti ti-device-floppy"></i> 儲存任務
+            </button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- 更新狀態 Modal -->
+    <div id="task-modal" style="display:none;position:fixed;inset:0;
+         background:rgba(15,23,42,.5);z-index:9999;align-items:center;
+         justify-content:center;backdrop-filter:blur(2px)">
+      <div style="background:var(--white);border-radius:var(--r-xl);padding:28px;
+                  width:90%;max-width:400px;box-shadow:var(--shadow-lg)">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+          <div style="font-size:16px;font-weight:700">更新任務狀態</div>
+          <button onclick="closeTaskModal()"
+                  style="background:none;border:none;font-size:20px;color:var(--ink-400);cursor:pointer">✕</button>
+        </div>
+        <input type="hidden" id="modal-task-id">
+        <div class="field" style="margin-bottom:12px">
+          <label>狀態</label>
+          <select id="modal-status"
+                  style="padding:10px;border:1.5px solid var(--kitchen-card-border);
+                         border-radius:var(--r-md);font-size:14px;width:100%">
+            <option value="待完成">待完成</option>
+            <option value="進行中">進行中</option>
+            <option value="完成">完成</option>
+          </select>
+        </div>
+        <div class="field" style="margin-bottom:16px">
+          <label>備註</label>
+          <textarea id="modal-note" rows="3"
+                    style="padding:10px;border:1.5px solid var(--kitchen-card-border);
+                           border-radius:var(--r-md);font-size:13px;width:100%;resize:vertical"></textarea>
+        </div>
+        <div style="display:flex;gap:8px;justify-content:flex-end">
+          <button class="btn btn--sm" onclick="closeTaskModal()">取消</button>
+          <button class="btn btn--kitchen btn--sm" id="btn-modal-save" onclick="saveTaskModal()">
+            <i class="ti ti-device-floppy"></i> 儲存
+          </button>
+        </div>
+      </div>
+    </div>`;
+
+  // 新增任務表單送出
+  $('add-task-form')?.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const selectEl  = $('task-content-select');
+    const inputEl   = $('task-content-input');
+    const content   = selectEl.value === '__custom__'
+      ? inputEl.value.trim()
+      : (selectEl.value || inputEl.value.trim());
+    if (!content) { UI.toast('請選擇或輸入工作內容', 'error'); return; }
+    const data = {
+      content,
+      date:     $('task-date').value,
+      type:     e.target.querySelector('[name="type"]').value,
+      assignee: e.target.querySelector('[name="assignee"]').value,
+      priority: e.target.querySelector('[name="priority"]').value,
+    };
+    const btn = $('btn-add-task');
+    UI.btnLoad(btn, true);
+    try {
+      await API.saveWeeklyTask(data);
+      UI.toast('✓ 任務已新增');
+      closeAddTaskModal();
+      loadWeeklyPlan();
+    } catch(err) { UI.toast(err.message, 'error'); }
+    finally { UI.btnLoad(btn, false); }
+  });
+
   loadWeeklyPlan();
 }
+
+// 產生工作項目庫的 option HTML（依類型分組）
+function buildTaskLibraryOptions() {
+  const library = KitchenApp.cache.taskLibrary || [];
+  if (!library.length) return '';
+  // 依類型分組
+  const groups = {};
+  library.forEach(item => {
+    const type = item.type || '其他';
+    if (!groups[type]) groups[type] = [];
+    groups[type].push(item);
+  });
+  return Object.entries(groups).map(([type, items]) => `
+    <optgroup label="── ${type} ──">
+      ${items.map(item =>
+        `<option value="${item.content}"
+                 data-type="${item.type}"
+                 data-priority="${item.priority}">
+          ${item.content}
+        </option>`
+      ).join('')}
+    </optgroup>`
+  ).join('');
+}
+
+// 選擇工作項目時自動帶入類型和優先級
+window.onTaskContentSelect = function(sel) {
+  const opt      = sel.selectedOptions[0];
+  const inputEl  = $('task-content-input');
+  if (sel.value === '__custom__') {
+    inputEl.style.display = 'block';
+    inputEl.focus();
+  } else {
+    inputEl.style.display = 'none';
+    // 帶入對應的類型和優先級
+    if (opt?.dataset?.type) {
+      const typeEl = $('task-type');
+      if (typeEl) typeEl.value = opt.dataset.type;
+    }
+    if (opt?.dataset?.priority) {
+      const priEl = document.querySelector('[name="priority"]');
+      if (priEl) priEl.value = opt.dataset.priority;
+    }
+  }
+};
+
+window.openAddTaskModal = function() {
+  const m = $('add-task-modal');
+  if (m) {
+    m.style.display = 'flex';
+    // 重設表單
+    const sel = $('task-content-select');
+    if (sel) sel.value = '';
+    const inp = $('task-content-input');
+    if (inp) { inp.style.display = 'none'; inp.value = ''; }
+    $('task-date').value = t();
+  }
+};
+window.closeAddTaskModal = function() {
+  const m = $('add-task-modal'); if (m) m.style.display = 'none';
+};
 
 window.loadWeeklyPlan = async function() {
   const weekStr = $('week-input')?.value || currentWeekStr();
