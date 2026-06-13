@@ -70,5 +70,57 @@ const UI = (() => {
   // ── Color helpers ─────────────────────────────────────────
   function moneyClass(n) { return Number(n) >= 0 ? 'c-green' : 'c-red'; }
 
-  return { toast, showLoading, hideLoading, btnLoad, formData, resetForm, todayISO, monthISO, fmtDate, fmtMoney, fmtNum, moneyClass };
+  // ── localStorage 快取（設定類資料）──────────────────────────
+  // 用於 settings/stalls/ingredients/taskLibrary/dispatchers 等
+  // 不常變動的設定資料，減少重複呼叫 API
+  const CACHE_PREFIX  = 'ck_cache_';
+  const CACHE_VERSION = 'v1'; // 改變此值可強制讓所有用戶端快取失效
+
+  function cacheKey(key) { return CACHE_PREFIX + CACHE_VERSION + '_' + key; }
+
+  /**
+   * 寫入快取，附帶時間戳記
+   */
+  function cacheSet(key, value) {
+    try {
+      localStorage.setItem(cacheKey(key), JSON.stringify({
+        ts: Date.now(),
+        data: value,
+      }));
+    } catch (e) { /* localStorage 滿了或不可用，靜默失敗 */ }
+  }
+
+  /**
+   * 讀取快取，超過 maxAgeMs 視為過期回傳 null
+   * @param {string} key
+   * @param {number} maxAgeMs - 預設 10 分鐘
+   */
+  function cacheGet(key, maxAgeMs = 10 * 60 * 1000) {
+    try {
+      const raw = localStorage.getItem(cacheKey(key));
+      if (!raw) return null;
+      const parsed = JSON.parse(raw);
+      if (Date.now() - parsed.ts > maxAgeMs) return null;
+      return parsed.data;
+    } catch (e) { return null; }
+  }
+
+  function cacheClear(key) {
+    try { localStorage.removeItem(cacheKey(key)); } catch (e) {}
+  }
+
+  /** 清除所有 ck_cache_ 開頭的快取（例如登出或強制重新整理時）*/
+  function cacheClearAll() {
+    try {
+      Object.keys(localStorage)
+        .filter(k => k.startsWith(CACHE_PREFIX))
+        .forEach(k => localStorage.removeItem(k));
+    } catch (e) {}
+  }
+
+  return {
+    toast, showLoading, hideLoading, btnLoad, formData, resetForm,
+    todayISO, monthISO, fmtDate, fmtMoney, fmtNum, moneyClass,
+    cacheSet, cacheGet, cacheClear, cacheClearAll,
+  };
 })();

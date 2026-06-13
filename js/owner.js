@@ -45,21 +45,36 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.querySelectorAll('.nav-item[data-page]').forEach(el =>
     el.addEventListener('click', () => showPage(el.dataset.page)));
 
-  // 一次 API 載入今日所有資料
-  await fetchDashboard(t());
-  showPage('dashboard');
+  // 1. 嘗試從 localStorage 取得快取（短 TTL，2 分鐘），先顯示舊資料不等待
+  const date = t();
+  const cached = UI.cacheGet('dashboard_' + date, 2 * 60 * 1000);
+  if (cached) {
+    OwnerApp.data      = cached;
+    OwnerApp.queryDate = date;
+    showPage('dashboard');
+  }
+
+  // 2. 背景抓最新資料（一定執行，確保資料正確）
+  await fetchDashboard(date, !cached);
+  if (!cached) showPage('dashboard');
+  else showPage(OwnerApp.page); // 用最新資料重新渲染目前頁面
 });
 
 // ── 核心：向後端請求一次，拿回所有資料 ──────────────────────
-async function fetchDashboard(date) {
+// showSpinner: 是否顯示全螢幕載入動畫（背景刷新時不顯示，避免畫面閃爍）
+async function fetchDashboard(date, showSpinner = true) {
   if (OwnerApp.loading) return;
   OwnerApp.loading = true;
   OwnerApp.queryDate = date;
 
-  UI.showLoading('載入資料…');
+  if (showSpinner) UI.showLoading('載入資料…');
   try {
     const res = await API.getOwnerDashboard(date);
     OwnerApp.data = res.data;
+
+    // 寫入 localStorage（依日期分 key，短 TTL）
+    UI.cacheSet('dashboard_' + date, res.data);
+
     // 更新 topbar 日期顯示（若查詢非今日）
     if (date !== t()) {
       document.getElementById('topbar-date').textContent =
@@ -67,7 +82,7 @@ async function fetchDashboard(date) {
     }
   } catch (e) {
     UI.toast('載入失敗：' + e.message, 'error', 8000);
-    OwnerApp.data = null;
+    if (!OwnerApp.data) OwnerApp.data = null;
   } finally {
     UI.hideLoading();
     OwnerApp.loading = false;
@@ -110,8 +125,19 @@ function dateBar(inputId) {
 
 window.changeDate = async (inputId) => {
   const date = $(inputId)?.value || t();
-  await fetchDashboard(date);
-  showPage(OwnerApp.page); // 重新渲染當前頁
+
+  // 切換到的日期若有快取，先顯示，再背景更新
+  const cached = UI.cacheGet('dashboard_' + date, 2 * 60 * 1000);
+  if (cached) {
+    OwnerApp.data = cached;
+    OwnerApp.queryDate = date;
+    showPage(OwnerApp.page);
+    await fetchDashboard(date, false);
+    showPage(OwnerApp.page);
+  } else {
+    await fetchDashboard(date, true);
+    showPage(OwnerApp.page);
+  }
 };
 
 // ═══════════════════════════════════════════════════════════════
@@ -337,8 +363,25 @@ function renderKitchenPL(el) {
     try {
       await API.saveKitchenCost(data);
       UI.toast('✓ 成本已新增');
-      // 重新 fetch 更新快取
-      await fetchDashboard(OwnerApp.queryDate || t());
+
+      // 本地更新快取資料，不重抓整張表
+      const queryDate = OwnerApp.queryDate || t();
+      if (data.date === queryDate && OwnerApp.data) {
+        const amount = Number(data.amount) || 0;
+        OwnerApp.data.kitchen.costs.push({
+          date: data.date, type: data.type, amount, note: data.note || '',
+        });
+        OwnerApp.data.kitchen.cost   += amount;
+        OwnerApp.data.kitchen.profit -= amount;
+        const tb = OwnerApp.data.kitchen.totalBarrels;
+        OwnerApp.data.kitchen.avgCostPerBarrel   = tb ? Math.round(OwnerApp.data.kitchen.cost / tb)   : 0;
+        OwnerApp.data.kitchen.avgProfitPerBarrel = tb ? Math.round(OwnerApp.data.kitchen.profit / tb) : 0;
+        if (data.date === t()) {
+          OwnerApp.data.kitchen.profitMonth -= amount;
+        }
+        UI.cacheSet('dashboard_' + queryDate, OwnerApp.data);
+      }
+
       showPage('kitchen-pl');
     } catch(err) { UI.toast(err.message, 'error'); }
     finally { UI.btnLoad(btn, false); }
@@ -475,7 +518,25 @@ function renderStallPL(el) {
     try {
       await API.saveStallCost(data);
       UI.toast('✓ 攤位成本已新增');
-      await fetchDashboard(OwnerApp.queryDate || t());
+
+      // 本地更新快取資料，不重抓整張表
+      const queryDate = OwnerApp.queryDate || t();
+      if (data.date === queryDate && OwnerApp.data) {
+        const amount = Number(data.amount) || 0;
+        const s = OwnerApp.data.stalls.find(x => x.stall_id === data.stall_id);
+        if (s && s.has_report) {
+          s.extras     = (s.extras || 0) + amount;
+          s.totalCost  = (s.totalCost || 0) + amount;
+          s.netProfit  = (s.netProfit || 0) - amount;
+        }
+        // 本月淨利也扣除（若今日在本月內，通常是）
+        if (queryDate === t()) {
+          const m = OwnerApp.data.stallMonthly?.find(x => x.stall_id === data.stall_id);
+          if (m) m.monthNetProfit = (m.monthNetProfit || 0) - amount;
+        }
+        UI.cacheSet('dashboard_' + queryDate, OwnerApp.data);
+      }
+
       showPage('stall-pl');
     } catch(err) { UI.toast(err.message, 'error'); }
     finally { UI.btnLoad(btn, false); }
@@ -562,9 +623,22 @@ function renderInventory(el) {
     try {
       await API.saveInventoryLog(data);
       UI.toast('✓ 已儲存');
+
+      // 本地更新庫存數字，不重抓整張表
+      const queryDate = OwnerApp.queryDate || t();
+      if (OwnerApp.data) {
+        const item = OwnerApp.data.inventory?.find(x => x.item_id === data.item_id);
+        if (item) {
+          const qty = Number(data.qty) || 0;
+          if (data.type === 'in')  item.current_stock += qty;
+          if (data.type === 'out') item.current_stock -= qty;
+          item.is_low = item.current_stock < item.min_stock;
+          OwnerApp.data.lowStock = OwnerApp.data.inventory.filter(i => i.is_low);
+          UI.cacheSet('dashboard_' + queryDate, OwnerApp.data);
+        }
+      }
+
       UI.resetForm(e.target);
-      // 重新 fetch 更新庫存數字
-      await fetchDashboard(OwnerApp.queryDate || t());
       showPage('inventory');
     } catch(err) { UI.toast(err.message, 'error'); }
     finally { UI.btnLoad(btn, false); }

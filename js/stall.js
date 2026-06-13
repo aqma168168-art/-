@@ -18,7 +18,10 @@ function remOptions(max) {
   ).join('');
 }
 
-// ── 初始化 ────────────────────────────────────────────────────
+// ── 初始化：localStorage 快取選單 → 立即顯示表單，背景刷新 ──
+const STALL_OPTS_CACHE_KEY = 'stall_form_options';
+const STALL_OPTS_MAX_AGE   = 30 * 60 * 1000; // 30 分鐘（選單變動不頻繁）
+
 document.addEventListener('DOMContentLoaded', async () => {
   const now = new Date();
   document.getElementById('stall-date-display').textContent =
@@ -26,53 +29,92 @@ document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('s-date').value = UI.todayISO();
 
   const connBadge = document.getElementById('stall-conn-badge');
-  UI.showLoading('連線中…');
+  document.getElementById('btn-stall-submit').addEventListener('click', submitStallReport);
 
+  // 1. 嘗試從 localStorage 取得快取，立即顯示表單
+  const cached = UI.cacheGet(STALL_OPTS_CACHE_KEY, STALL_OPTS_MAX_AGE);
+  let renderedFromCache = false;
+  if (cached) {
+    StallApp.opts = cached;
+    buildForm(StallApp.opts);
+    connBadge.textContent = '快取載入';
+    connBadge.classList.add('conn-badge--ok');
+    renderedFromCache = true;
+  } else {
+    UI.showLoading('連線中…');
+  }
+
+  // 2. 背景向後端確認最新選單（攤位、回報人名單可能變動）
   try {
-    // 一次 API 拿回所有選單設定
     const res = await API.getStallFormOptions();
     StallApp.opts = res.data;
-    buildForm(StallApp.opts);
+    UI.cacheSet(STALL_OPTS_CACHE_KEY, res.data);
+
+    if (!renderedFromCache) {
+      buildForm(StallApp.opts);
+    } else {
+      // 已用快取顯示表單，若選項有變動，靜默更新（不打斷使用者填寫）
+      refreshFormOptionsIfChanged(cached, StallApp.opts);
+    }
     connBadge.textContent = '已連線 ✓';
+    connBadge.classList.remove('conn-badge--error');
     connBadge.classList.add('conn-badge--ok');
   } catch(e) {
-    connBadge.textContent = '連線失敗';
-    connBadge.classList.add('conn-badge--error');
-    UI.toast('無法載入設定，請確認網路', 'error', 6000);
+    if (!renderedFromCache) {
+      connBadge.textContent = '連線失敗';
+      connBadge.classList.add('conn-badge--error');
+      UI.toast('無法載入設定，請確認網路', 'error', 6000);
+    } else {
+      // 已有快取可用，背景更新失敗不影響填寫
+      connBadge.textContent = '離線（使用快取）';
+    }
   } finally {
     UI.hideLoading();
   }
-
-  document.getElementById('btn-stall-submit').addEventListener('click', submitStallReport);
 });
+
+// 比較快取與最新選單，若有差異才重建表單（避免不必要的重繪打斷輸入）
+function refreshFormOptionsIfChanged(oldOpts, newOpts) {
+  const changed = JSON.stringify(oldOpts) !== JSON.stringify(newOpts);
+  if (!changed) return;
+  // 選單有變動：保留使用者目前已選的攤位/回報人（若仍存在於新清單）
+  const curStall    = document.getElementById('s-stall').value;
+  const curReporter = document.getElementById('s-reporter').value;
+  buildForm(newOpts);
+  if (curStall)    document.getElementById('s-stall').value = curStall;
+  if (curReporter) document.getElementById('s-reporter').value = curReporter;
+}
 
 // ── 動態建立表單選單 ──────────────────────────────────────────
 function buildForm(opts) {
-  // 攤位下拉
+  // 攤位下拉（清除舊選項，保留第一個「請選擇…」）
   const stallSel = document.getElementById('s-stall');
+  stallSel.innerHTML = '<option value="">請選擇…</option>';
   opts.stalls.forEach(s => {
     const o = document.createElement('option');
     o.value = s.stall_id; o.textContent = s.stall_name;
     stallSel.appendChild(o);
   });
 
-  // 回報人
+  // 回報人（清除舊選項，保留第一個「請選擇…」）
   const repSel = document.getElementById('s-reporter');
+  repSel.innerHTML = '<option value="">請選擇…</option>';
   opts.reporters.forEach(n => {
     const o = document.createElement('option');
     o.value = n; o.textContent = n;
     repSel.appendChild(o);
   });
 
-  // 賣完時間：自由輸入，自動格式化
+  // 賣完時間：自由輸入，自動格式化（只綁定一次，避免重複觸發）
   const timeInput = document.getElementById('s-soldout');
-  if (timeInput) {
+  if (timeInput && !timeInput.dataset.bound) {
     timeInput.addEventListener('input', formatTimeInput);
     timeInput.addEventListener('blur',  validateTimeInput);
-    // focus 時清除提示
     timeInput.addEventListener('focus', () => {
-      document.getElementById('soldout-hint').style.display = 'none';
+      const hint = document.getElementById('soldout-hint');
+      if (hint) hint.style.display = 'none';
     });
+    timeInput.dataset.bound = '1';
   }
 
   // 桶數（0.5 間距，從 0.5 到 maxBarrels）

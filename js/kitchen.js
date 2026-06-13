@@ -29,7 +29,10 @@ const K_TITLES = {
   'cost-input':  '成本輸入',
 };
 
-// ── 初始化：一次 API 搞定所有設定 ────────────────────────────
+// ── 初始化：localStorage 快取設定 → 立即顯示，背景刷新 ──────
+const KITCHEN_CONFIG_CACHE_KEY = 'kitchen_config';
+const KITCHEN_CONFIG_MAX_AGE   = 10 * 60 * 1000; // 10 分鐘
+
 document.addEventListener('DOMContentLoaded', async () => {
   document.getElementById('topbar-date').textContent =
     new Date().toLocaleDateString('zh-TW', {
@@ -37,9 +40,29 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
 
   const badge = document.getElementById('conn-badge');
-  UI.showLoading('載入廚房資料…');
+
+  // 1. 嘗試從 localStorage 取得設定快取（不含當日異動資料）
+  const cached = UI.cacheGet(KITCHEN_CONFIG_CACHE_KEY, KITCHEN_CONFIG_MAX_AGE);
+  let renderedFromCache = false;
+
+  if (cached) {
+    KitchenApp.cache.settings    = cached.settings;
+    KitchenApp.cache.stalls      = cached.stalls;
+    KitchenApp.cache.ingredients = cached.ingredients;
+    KitchenApp.cache.dispatchers = cached.dispatchers || [];
+    KitchenApp.cache.taskLibrary = cached.taskLibrary  || [];
+
+    // 立即綁定導覽與顯示首頁，不等網路
+    bindNav();
+    if (badge) { badge.textContent = '快取載入'; badge.className = 'badge badge--gray'; }
+    showPage('dispatch');
+    renderedFromCache = true;
+  } else {
+    UI.showLoading('載入廚房資料…');
+  }
+
+  // 2. 背景呼叫 API：取得最新設定 + 今日異動資料（一定要拿到，因為資料逐日變動）
   try {
-    // 一次 API：設定 + 攤位 + 配料 + 今日配發 + 庫存
     const res = await API.getKitchenInit(t());
     const d   = res.data;
 
@@ -53,24 +76,46 @@ document.addEventListener('DOMContentLoaded', async () => {
     KitchenApp.cache.lowStock        = d.lowStock || [];
     KitchenApp.cache.initDate        = d.date;
 
+    // 寫入 localStorage（只存設定類，不存逐日異動資料）
+    UI.cacheSet(KITCHEN_CONFIG_CACHE_KEY, {
+      settings:    d.settings,
+      stalls:      d.stalls,
+      ingredients: d.ingredients,
+      dispatchers: d.dispatchers,
+      taskLibrary: d.taskLibrary,
+    });
+
     if (badge) { badge.textContent = '已連線'; badge.className = 'badge badge--green'; }
 
     // 低庫存警示
     if (d.lowStock.length > 0) {
       UI.toast(`⚠ ${d.lowStock.length} 項庫存低於安全庫存`, 'info', 5000);
     }
+
+    if (!renderedFromCache) {
+      bindNav();
+      showPage('dispatch');
+    } else {
+      // 用快取先顯示過，現在資料更新了，重新渲染目前頁面以套用最新今日資料
+      showPage(KitchenApp.page);
+    }
   } catch(e) {
-    UI.toast('無法載入設定：' + e.message, 'error', 6000);
+    if (!renderedFromCache) {
+      UI.toast('無法載入設定：' + e.message, 'error', 6000);
+      bindNav();
+    } else {
+      UI.toast('背景更新失敗，目前顯示快取資料：' + e.message, 'error', 5000);
+    }
     if (badge) { badge.textContent = '連線失敗'; badge.className = 'badge badge--red'; }
   } finally {
     UI.hideLoading();
   }
+});
 
+function bindNav() {
   document.querySelectorAll('.nav-item[data-page]').forEach(el =>
     el.addEventListener('click', () => showPage(el.dataset.page)));
-
-  showPage('dispatch');
-});
+}
 
 // ── 路由（同步包裝 async 函式，確保 el 正確傳入）────────────
 function showPage(page) {
@@ -1093,6 +1138,15 @@ function renderWasteLog(el) {
       UI.toast('✓ 報廢記錄已新增，庫存已扣除');
       UI.resetForm(e.target);
       e.target.querySelector('[name="date"]').value = t();
+
+      // 本地扣除庫存，不重抓
+      const item = KitchenApp.cache.inventory.find(x => x.item_id === data.item_id);
+      if (item) {
+        item.current_stock -= Number(data.qty) || 0;
+        item.is_low = item.current_stock < item.min_stock;
+        KitchenApp.cache.lowStock = KitchenApp.cache.inventory.filter(i => i.is_low);
+      }
+
       loadWasteLogs();
     } catch(err) { UI.toast(err.message, 'error'); }
     finally { UI.btnLoad(btn, false); }
@@ -1191,8 +1245,18 @@ function renderInventory(el) {
       UI.toast('✓ 已儲存');
       UI.resetForm(e.target);
       e.target.querySelector('[name="date"]').value = t();
-      // 儲存後重新抓庫存更新快取
-      await refreshInventoryCache();
+
+      // 本地更新庫存數字，不重抓
+      const item = KitchenApp.cache.inventory.find(x => x.item_id === data.item_id);
+      if (item) {
+        const qty = Number(data.qty) || 0;
+        if (data.type === 'in')  item.current_stock += qty;
+        if (data.type === 'out') item.current_stock -= qty;
+        item.is_low = item.current_stock < item.min_stock;
+        KitchenApp.cache.lowStock = KitchenApp.cache.inventory.filter(i => i.is_low);
+        const ov = $('k-inv-overview');
+        if (ov) ov.innerHTML = renderInventoryList(KitchenApp.cache.inventory);
+      }
     } catch(err) { UI.toast(err.message, 'error'); }
     finally { UI.btnLoad(btn, false); }
   });
@@ -1217,16 +1281,6 @@ function renderInventoryList(items) {
   }).join('');
 }
 
-async function refreshInventoryCache() {
-  try {
-    const res = await API.getInventory();
-    KitchenApp.cache.inventory = res.data || [];
-    KitchenApp.cache.lowStock  = KitchenApp.cache.inventory.filter(i => i.is_low);
-    // 更新畫面上的庫存列表
-    const ov = $('k-inv-overview');
-    if (ov) ov.innerHTML = renderInventoryList(KitchenApp.cache.inventory);
-  } catch(e) { /* 靜默失敗，不影響主流程 */ }
-}
 
 // ═══════════════════════════════════════════════════════════════
 // 成本輸入
