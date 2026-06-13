@@ -466,6 +466,14 @@ function renderWeeklyPlan(el) {
                           border-radius:var(--r-md);font-size:13px;outline:none">
           </div>
 
+          <!-- 前置任務預覽 -->
+          <div id="pre-task-preview" style="display:none;margin-top:10px;margin-bottom:14px;padding:12px;
+               background:var(--ink-50);border-radius:var(--r-md);border:1px solid var(--ink-200)"></div>
+          <input type="hidden" id="task-pre-item-id">
+          <input type="hidden" id="task-pre-days">
+          <input type="hidden" id="task-pre-desc">
+          <input type="hidden" id="task-pre-type">
+
           <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:14px">
             <div class="field">
               <label style="color:var(--ink-700)">日期 *</label>
@@ -559,27 +567,41 @@ function renderWeeklyPlan(el) {
       </div>
     </div>`;
 
-  // 新增任務表單送出
   $('add-task-form')?.addEventListener('submit', async (e) => {
     e.preventDefault();
-    const selectEl  = $('task-content-select');
-    const inputEl   = $('task-content-input');
-    const content   = selectEl.value === '__custom__'
+    const selectEl = $('task-content-select');
+    const inputEl  = $('task-content-input');
+    const content  = selectEl.value === '__custom__'
       ? inputEl.value.trim()
       : (selectEl.value || inputEl.value.trim());
     if (!content) { UI.toast('請選擇或輸入工作內容', 'error'); return; }
+
     const data = {
       content,
-      date:     $('task-date').value,
-      type:     e.target.querySelector('[name="type"]').value,
-      assignee: e.target.querySelector('[name="assignee"]').value,
-      priority: e.target.querySelector('[name="priority"]').value,
+      date:         $('task-date').value,
+      type:         e.target.querySelector('[name="type"]').value,
+      assignee:     e.target.querySelector('[name="assignee"]').value,
+      priority:     e.target.querySelector('[name="priority"]').value,
+      // 前置任務資訊（有前置時後端自動產生）
+      pre_item_id:  $('task-pre-item-id')?.value || '',
+      pre_days:     parseInt($('task-pre-days')?.value || '0'),
+      pre_desc:     $('task-pre-desc')?.value || '',
+      pre_type:     $('task-pre-type')?.value || '',
     };
+
     const btn = $('btn-add-task');
     UI.btnLoad(btn, true);
     try {
-      await API.saveWeeklyTask(data);
-      UI.toast('✓ 任務已新增');
+      const res = await API.saveWeeklyTask(data);
+      const created = res.created || [];
+      const autoCount = created.filter(c => c.origin === 'auto').length;
+      let msg = '✓ 任務已新增';
+      if (autoCount > 0) {
+        const purchaseAuto = created.find(c => c.pre_type === '採購');
+        msg += `，並自動新增 ${autoCount} 個前置任務`;
+        if (purchaseAuto) msg += '（含採購提醒）';
+      }
+      UI.toast(msg, 'success', 5000);
       closeAddTaskModal();
       loadWeeklyPlan();
     } catch(err) { UI.toast(err.message, 'error'); }
@@ -593,7 +615,6 @@ function renderWeeklyPlan(el) {
 function buildTaskLibraryOptions() {
   const library = KitchenApp.cache.taskLibrary || [];
   if (!library.length) return '';
-  // 依類型分組
   const groups = {};
   library.forEach(item => {
     const type = item.type || '其他';
@@ -602,34 +623,79 @@ function buildTaskLibraryOptions() {
   });
   return Object.entries(groups).map(([type, items]) => `
     <optgroup label="── ${type} ──">
-      ${items.map(item =>
-        `<option value="${item.content}"
-                 data-type="${item.type}"
-                 data-priority="${item.priority}">
-          ${item.content}
-        </option>`
-      ).join('')}
-    </optgroup>`
-  ).join('');
+      ${items.map(item => `
+        <option value="${item.content}"
+                data-type="${item.type}"
+                data-priority="${item.priority}"
+                data-pre-item-id="${item.pre_item_id||''}"
+                data-pre-days="${item.pre_days||0}"
+                data-pre-desc="${item.pre_desc||''}"
+                data-pre-type="${item.pre_type||''}">
+          ${item.content}${item.pre_item_id ? ' ⚙' : ''}
+        </option>`).join('')}
+    </optgroup>`).join('');
 }
 
-// 選擇工作項目時自動帶入類型和優先級
+// 選擇工作項目時自動帶入類型、優先級、前置資訊
 window.onTaskContentSelect = function(sel) {
-  const opt      = sel.selectedOptions[0];
-  const inputEl  = $('task-content-input');
+  const opt     = sel.selectedOptions[0];
+  const inputEl = $('task-content-input');
   if (sel.value === '__custom__') {
     inputEl.style.display = 'block';
     inputEl.focus();
-  } else {
-    inputEl.style.display = 'none';
-    // 帶入對應的類型和優先級
-    if (opt?.dataset?.type) {
-      const typeEl = $('task-type');
-      if (typeEl) typeEl.value = opt.dataset.type;
-    }
-    if (opt?.dataset?.priority) {
-      const priEl = document.querySelector('[name="priority"]');
-      if (priEl) priEl.value = opt.dataset.priority;
+    // 清除前置資訊
+    ['task-pre-item-id','task-pre-days','task-pre-desc','task-pre-type'].forEach(id => {
+      const el = $(id); if (el) el.value = '';
+    });
+    $('pre-task-preview') && ($('pre-task-preview').style.display = 'none');
+    return;
+  }
+  inputEl.style.display = 'none';
+
+  // 帶入類型和優先級
+  if (opt?.dataset?.type) {
+    const el = $('task-type'); if (el) el.value = opt.dataset.type;
+  }
+  if (opt?.dataset?.priority) {
+    const el = document.querySelector('[name="priority"]'); if (el) el.value = opt.dataset.priority;
+  }
+
+  // 帶入前置任務資訊並顯示預覽
+  const preItemId = opt?.dataset?.preItemId || '';
+  const preDays   = parseInt(opt?.dataset?.preDays || '0');
+  const preDesc   = opt?.dataset?.preDesc || '';
+  const preType   = opt?.dataset?.preType || '';
+
+  ['task-pre-item-id','task-pre-days','task-pre-desc','task-pre-type'].forEach((id, i) => {
+    const el = $(id);
+    if (el) el.value = [preItemId, preDays, preDesc, preType][i];
+  });
+
+  const preview = $('pre-task-preview');
+  if (preview) {
+    if (preItemId && preDays > 0 && preDesc) {
+      const icon = preType === '採購' ? '🛒' : '⚙';
+      preview.style.display = 'block';
+      preview.innerHTML = `
+        <div style="display:flex;align-items:flex-start;gap:8px">
+          <span style="font-size:16px">${icon}</span>
+          <div>
+            <div style="font-weight:600;font-size:13px">自動新增前置任務</div>
+            <div style="font-size:12px;color:var(--ink-600);margin-top:2px">
+              <strong>${sel.value}</strong> 排定後，系統將自動在
+              <strong>提前 ${preDays} 天</strong> 新增：
+            </div>
+            <div style="margin-top:6px;padding:6px 10px;
+                        background:${preType==='採購'?'var(--sky-50,#F0F9FF)':'var(--violet-50,#F5F3FF)'};
+                        border-radius:var(--r-md);font-size:12px;font-weight:500;
+                        color:${preType==='採購'?'var(--sky-600,#0284C7)':'var(--violet-600,#4F46E5)'}">
+              ${icon} ${preDesc}
+              ${preType === '採購' ? '<br><span style="font-size:11px;opacity:.8">同時寫入庫存採購提醒</span>' : ''}
+            </div>
+          </div>
+        </div>`;
+    } else {
+      preview.style.display = 'none';
     }
   }
 };
@@ -661,6 +727,36 @@ window.loadWeeklyPlan = async function() {
     const dayNames  = ['一','二','三','四','五','六','日'];
     const priColor  = { '高':'badge--red', '中':'badge--amber', '低':'badge--gray' };
     const statColor = { '待完成':'badge--gray', '進行中':'badge--sky', '完成':'badge--green' };
+
+    // 任務卡片顏色：手動=橘、自動前置=紫、採購=藍
+    function getTaskCardStyle(task) {
+      const c = task.content || '';
+      if (c.startsWith('🛒')) return {
+        bg:     'var(--sky-50,#F0F9FF)',
+        border: 'var(--sky-200,#BAE6FD)',
+        color:  'var(--sky-700,#0369A1)',
+        badge:  'badge--sky',
+      };
+      if (c.startsWith('⚙')) return {
+        bg:     'var(--violet-50,#F5F3FF)',
+        border: 'var(--violet-200,#DDD6FE)',
+        color:  'var(--violet-700,#6D28D9)',
+        badge:  'badge--violet',
+      };
+      return {
+        bg:     'var(--white)',
+        border: 'var(--kitchen-card-border)',
+        color:  'var(--ink-900)',
+        badge:  'badge--orange',
+      };
+    }
+
+    function taskListItemStyle(task) {
+      const c = task.content || '';
+      if (c.startsWith('🛒')) return 'background:var(--sky-50,#F0F9FF);border-left:3px solid var(--sky-400,#38BDF8);padding-left:9px;border-radius:0 var(--r-md) var(--r-md) 0;';
+      if (c.startsWith('⚙'))  return 'background:var(--violet-50,#F5F3FF);border-left:3px solid var(--violet-400,#A78BFA);padding-left:9px;border-radius:0 var(--r-md) var(--r-md) 0;';
+      return '';
+    }
     const byDate = {};
     dates.forEach(d => { byDate[d] = []; });
     tasks.forEach(task => { if (byDate[task.date]) byDate[task.date].push(task); });
@@ -677,16 +773,18 @@ window.loadWeeklyPlan = async function() {
             <div style="font-size:12px;color:var(--ink-500);margin-bottom:8px">${date.slice(5)}</div>
             ${dayTasks.length === 0
               ? '<div style="font-size:11px;color:var(--ink-300);text-align:center;padding:8px 0">—</div>'
-              : dayTasks.map(task => `
-                <div style="background:var(--white);border:1px solid var(--kitchen-card-border);
+              : dayTasks.map(task => {
+                  const style = getTaskCardStyle(task);
+                  return `
+                <div style="background:${style.bg};border:1px solid ${style.border};
                             border-radius:var(--r-md);padding:7px;margin-bottom:5px;cursor:pointer"
                      onclick="openTaskModal('${task.task_id}','${task.status}','${encodeURIComponent(task.note||'')}')">
-                  <div style="font-size:11px;font-weight:600;color:var(--ink-900);line-height:1.3;margin-bottom:3px">${task.content}</div>
+                  <div style="font-size:11px;font-weight:600;color:${style.color};line-height:1.3;margin-bottom:3px">${task.content}</div>
                   <div style="display:flex;gap:3px;flex-wrap:wrap">
                     <span class="badge ${priColor[task.priority]||'badge--gray'}" style="font-size:9px;padding:1px 5px">${task.priority||'中'}</span>
                     <span class="badge ${statColor[task.status]||'badge--gray'}" style="font-size:9px;padding:1px 5px">${task.status}</span>
                   </div>
-                </div>`).join('')}
+                </div>`;}).join('')}
           </div>`;
         }).join('')}
       </div>
@@ -695,7 +793,7 @@ window.loadWeeklyPlan = async function() {
       <div class="card card--kitchen">
         ${tasks.length === 0 ? noDataHTML() : tasks.map(task => `
           <div style="display:flex;align-items:flex-start;gap:12px;padding:12px 0;
-                      border-bottom:1px solid var(--kitchen-card-border)">
+                      border-bottom:1px solid var(--kitchen-card-border);${taskListItemStyle(task)}">
             <input type="checkbox" id="ck-${task.task_id}"
                    ${task.status==='完成'?'checked':''}
                    onchange="updateTaskStatus('${task.task_id}',this.checked)"
@@ -717,6 +815,22 @@ window.loadWeeklyPlan = async function() {
             </div>
             <span class="badge ${statColor[task.status]||'badge--gray'}">${task.status}</span>
           </div>`).join('')}
+      </div>
+
+      <!-- 顏色圖例 -->
+      <div style="display:flex;gap:16px;margin-top:12px;margin-bottom:4px;font-size:12px;
+                  color:var(--ink-500);align-items:center;flex-wrap:wrap;
+                  padding:10px 14px;background:var(--kitchen-section-head);border-radius:var(--r-md)">
+        <span style="font-weight:700;color:var(--amber-700)">圖例：</span>
+        <span style="display:flex;align-items:center;gap:5px">
+          <span style="width:10px;height:10px;border-radius:2px;background:var(--kitchen-sidebar-accent);display:inline-block"></span>手動新增
+        </span>
+        <span style="display:flex;align-items:center;gap:5px">
+          <span style="width:10px;height:10px;border-radius:2px;background:#A78BFA;display:inline-block"></span>⚙ 自動前置
+        </span>
+        <span style="display:flex;align-items:center;gap:5px">
+          <span style="width:10px;height:10px;border-radius:2px;background:#38BDF8;display:inline-block"></span>🛒 採購提醒
+        </span>
       </div>
 
       <div id="task-modal" style="display:none;position:fixed;inset:0;
