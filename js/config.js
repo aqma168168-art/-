@@ -3,7 +3,7 @@
 // ============================================================
 const CK_CONFIG = {
   // ▼ 請換成你的 Apps Script Web App URL
-  APPS_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbypQc1Ujg3FXsGBWkamBaL8AW2Ym6u2h-DxraRH5U_OBUsQZuSaJyEC7FfhEx4rkJ5LDg/exec',
+  APPS_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbxmCtHuASRyn-lW2ld9-vfomWGdpomBaM6NRfvdpYscuRcvRs2kJI7nATXt1xwJySDP8w/exec',
   VERSION: '2.0.0',
   DEV_MODE: ['localhost','127.0.0.1'].includes(window.location.hostname),
 };

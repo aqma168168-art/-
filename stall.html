@@ -168,17 +168,17 @@
 
   </form>
 
-  <!-- 完成畫面 -->
-  <div class="stall-done" id="stall-done">
-    <i class="ti ti-circle-check stall-done__icon"></i>
-    <div class="stall-done__title">回報完成！</div>
-    <div class="stall-done__sub" id="stall-done-detail"></div>
-    <button class="btn btn--stall btn--lg" onclick="resetStallForm()">
-      <i class="ti ti-refresh"></i> 再填一份
-    </button>
-  </div>
-
 </div><!-- /stall-page -->
+
+<!-- 完成畫面（獨立於 stall-page，避免父層 display:none 把它一起隱藏） -->
+<div class="stall-done" id="stall-done">
+  <i class="ti ti-circle-check stall-done__icon"></i>
+  <div class="stall-done__title">回報完成！</div>
+  <div class="stall-done__sub" id="stall-done-detail"></div>
+  <button class="btn btn--stall btn--lg" onclick="resetStallForm()">
+    <i class="ti ti-refresh"></i> 再填一份
+  </button>
+</div>
 
 <!-- 固定送出列 -->
 <div class="stall-submit-bar" id="submit-bar"

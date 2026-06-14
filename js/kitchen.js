@@ -193,7 +193,7 @@ function renderDispatchRows(container, rows) {
       <thead><tr>
         <th>攤位</th><th>配發人</th>
         <th>底料 大/中/小</th><th>米 大/中/小</th><th>芋頭 大/中/小</th>
-        <th>芋泥(包)</th><th>碎皮蛋</th><th>整皮蛋</th><th>芹菜</th><th>菜脯</th><th>備註</th>
+        <th>芋泥(包)</th><th>碎皮蛋</th><th>整皮蛋</th><th>芹菜</th><th>菜脯</th><th>備註</th><th></th>
       </tr></thead>
       <tbody>${rows.map(r=>`<tr>
         <td><strong>${r.stall_name||r.stall_id}</strong></td>
@@ -207,9 +207,24 @@ function renderDispatchRows(container, rows) {
         <td class="td-num">${r.celery||0}</td>
         <td class="td-num">${r.pickled_radish||0}</td>
         <td class="td-muted">${r.note||'—'}</td>
+        <td style="text-align:right">
+          ${r.id ? `<button class="btn btn--sm btn--danger" onclick="deleteDispatchRecord('${r.id}')" title="刪除"><i class="ti ti-trash"></i></button>` : ''}
+        </td>
       </tr>`).join('')}</tbody>
     </table></div></div>`;
 }
+
+// 刪除配發記錄
+window.deleteDispatchRecord = async function(id) {
+  if (!confirm('確定要刪除這筆配發記錄嗎？此操作無法復原。')) return;
+  try {
+    await API.deleteDispatch(id);
+    UI.toast('✓ 已刪除');
+    // 本地移除
+    KitchenApp.cache.todayDispatches = KitchenApp.cache.todayDispatches.filter(r => r.id !== id);
+    renderDispatchRows($('disp-list'), KitchenApp.cache.todayDispatches);
+  } catch(e) { UI.toast('刪除失敗：' + e.message, 'error'); }
+};
 
 window.loadDispatchList = async function() {
   const date = $('disp-date')?.value || t();
@@ -352,7 +367,7 @@ function renderLeftover(el) {
       c.innerHTML = `<div class="card card--kitchen"><div class="table-wrap table-wrap--kitchen"><table>
         <thead><tr>
           <th>攤位</th><th>底料 大/中/小</th><th>米 大/中/小</th><th>芋頭 大/中/小</th>
-          <th>芋泥</th><th>碎皮蛋</th><th>整皮蛋</th><th>芹菜</th><th>菜脯</th>
+          <th>芋泥</th><th>碎皮蛋</th><th>整皮蛋</th><th>芹菜</th><th>菜脯</th><th></th>
         </tr></thead>
         <tbody>${rows.map(r=>`<tr>
           <td><strong>${r.stall_name||r.stall_id}</strong></td>
@@ -364,11 +379,24 @@ function renderLeftover(el) {
           <td class="td-num">${r.rem_whole_egg||0}</td>
           <td class="td-num">${r.rem_celery||0}</td>
           <td class="td-num">${r.rem_pickled_radish||0}</td>
+          <td style="text-align:right">
+            ${r.id ? `<button class="btn btn--sm btn--danger" onclick="deleteStallReport('${r.id}','${yest}')" title="刪除"><i class="ti ti-trash"></i></button>` : ''}
+          </td>
         </tr>`).join('')}</tbody>
       </table></div></div>`;
     } catch(e) { $('leftover-content').innerHTML = errHTML(e); }
   })();
 }
+
+// 刪除攤位回報記錄
+window.deleteStallReport = async function(id, date) {
+  if (!confirm('確定要刪除這筆攤位回報記錄嗎？此操作無法復原。')) return;
+  try {
+    await API.deleteReport(id);
+    UI.toast('✓ 已刪除');
+    if (KitchenApp.page === 'leftover') renderLeftover($('page-body'));
+  } catch(e) { UI.toast('刪除失敗：' + e.message, 'error'); }
+};
 
 // ═══════════════════════════════════════════════════════════════
 // 建議備料
@@ -859,6 +887,9 @@ window.loadWeeklyPlan = async function() {
                                        border-radius:var(--r-sm)">✏️ ${task.note}</div>`:''}
             </div>
             <span class="badge ${statColor[task.status]||'badge--gray'}">${task.status}</span>
+            <button class="btn btn--sm btn--danger" onclick="deleteWeeklyTaskItem('${task.task_id}')" title="刪除" style="flex-shrink:0">
+              <i class="ti ti-trash"></i>
+            </button>
           </div>`).join('')}
       </div>
 
@@ -940,6 +971,18 @@ window.updateTaskStatus = async function(taskId, checked) {
     await API.saveWeeklyPlanStatus({ task_id: taskId, status: checked?'完成':'待完成', note:'' });
     UI.toast(checked ? '✓ 任務完成' : '任務重設為待完成');
   } catch(e) { UI.toast(e.message, 'error'); }
+};
+
+// 刪除週計畫任務
+window.deleteWeeklyTaskItem = async function(taskId) {
+  if (!confirm('確定要刪除這個任務嗎？此操作無法復原。')) return;
+  try {
+    await API.deleteWeeklyTask(taskId);
+    UI.toast('✓ 任務已刪除');
+    // 重新載入週計畫與月曆（資料量小，直接重抓即可）
+    if (KitchenApp.page === 'weekly-plan') loadWeeklyPlan();
+    if (KitchenApp.page === 'monthly-cal') loadMonthlyCal();
+  } catch(e) { UI.toast('刪除失敗：' + e.message, 'error'); }
 };
 
 // ═══════════════════════════════════════════════════════════════
@@ -1163,7 +1206,7 @@ window.loadWasteLogs = async function() {
     const rows = res.data || [];
     if (!rows.length) { c.innerHTML = noDataHTML(); return; }
     c.innerHTML = `<div class="table-wrap table-wrap--kitchen"><table>
-      <thead><tr><th>日期</th><th>品項</th><th>數量</th><th>報廢原因</th><th>記錄人</th><th>備註</th></tr></thead>
+      <thead><tr><th>日期</th><th>品項</th><th>數量</th><th>報廢原因</th><th>記錄人</th><th>備註</th><th></th></tr></thead>
       <tbody>${rows.map(r=>`<tr>
         <td>${r.date}</td>
         <td><strong>${r.item_name}</strong></td>
@@ -1171,9 +1214,35 @@ window.loadWasteLogs = async function() {
         <td><span class="badge badge--red">${r.reason}</span></td>
         <td>${r.recorder||'—'}</td>
         <td class="td-muted">${r.note||'—'}</td>
+        <td style="text-align:right">
+          <button class="btn btn--sm btn--danger" onclick="deleteWasteLogItem('${r.id}')" title="刪除（將還原庫存）">
+            <i class="ti ti-trash"></i>
+          </button>
+        </td>
       </tr>`).join('')}</tbody>
     </table></div>`;
   } catch(e) { c.innerHTML = errHTML(e); }
+};
+
+// 刪除報廢記錄（後端會自動還原庫存）
+window.deleteWasteLogItem = async function(id) {
+  if (!confirm('確定要刪除這筆報廢記錄嗎？刪除後將自動還原扣除的庫存。')) return;
+  try {
+    const res = await API.deleteWasteLog(id);
+
+    // 還原本地庫存快取
+    if (res.restoredQty) {
+      // 從 waste-list 取得對應 item_id 比較麻煩，直接重抓庫存最簡單可靠
+      const invRes = await API.getInventory();
+      KitchenApp.cache.inventory = invRes.data || [];
+      KitchenApp.cache.lowStock  = KitchenApp.cache.inventory.filter(i => i.is_low);
+      const ov = $('k-inv-overview');
+      if (ov) ov.innerHTML = renderInventoryList(KitchenApp.cache.inventory);
+    }
+
+    UI.toast('✓ 報廢記錄已刪除，庫存已還原');
+    loadWasteLogs();
+  } catch(e) { UI.toast('刪除失敗：' + e.message, 'error'); }
 };
 
 // ═══════════════════════════════════════════════════════════════

@@ -81,6 +81,17 @@ const API = (() => {
   // 攤位阿姨表單選項（一次拿回所有選單設定）
   async function getStallFormOptions() { return call('getStallFormOptions'); }
 
+  // ── 刪除功能 ──────────────────────────────────────────────
+  async function deleteReport(id)        { return call('deleteReport',      {}, { id }); }
+  async function deleteDispatch(id)      { return call('deleteDispatch',    {}, { id }); }
+  async function deleteKitchenCost(id)   { return call('deleteKitchenCost', {}, { id }); }
+  async function deleteStallCost(id)     { return call('deleteStallCost',   {}, { id }); }
+  async function deleteWasteLog(id)      { return call('deleteWasteLog',    {}, { id }); }
+  async function deleteWeeklyTask(task_id){ return call('deleteWeeklyTask', {}, { task_id }); }
+  async function deletePerson(name, listType) {
+    return call('deletePerson', {}, { name, list_type: listType });
+  }
+
   // OWNER — 一次拿完所有資料
   async function getOwnerDashboard(date) {
     return call('getOwnerDashboard', { date });
@@ -91,6 +102,8 @@ const API = (() => {
     getOwnerDashboard,
     getKitchenInit,
     getStallFormOptions,
+    deleteReport, deleteDispatch, deleteKitchenCost, deleteStallCost,
+    deleteWasteLog, deleteWeeklyTask, deletePerson,
     getTaskLibrary, saveWeeklyTask,
     getWeeklyPlan, saveWeeklyPlanStatus,
     getWasteLogs,  saveWasteLog,

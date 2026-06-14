@@ -691,7 +691,7 @@ function renderCosts(el) {
       <div class="table-wrap">
         <table>
           <thead>
-            <tr><th>日期</th><th>類型</th><th>金額</th><th>備註</th></tr>
+            <tr><th>日期</th><th>類型</th><th>金額</th><th>備註</th><th></th></tr>
           </thead>
           <tbody>
             ${costs.map(r=>`
@@ -700,6 +700,11 @@ function renderCosts(el) {
                 <td><span class="badge badge--gray">${r.type}</span></td>
                 <td class="td-num c-red">${fm(r.amount)}</td>
                 <td class="td-muted">${r.note||'—'}</td>
+                <td style="text-align:right">
+                  <button class="btn btn--sm btn--danger" onclick="deleteKitchenCost('${r.id}')" title="刪除">
+                    <i class="ti ti-trash"></i>
+                  </button>
+                </td>
               </tr>`).join('')}
           </tbody>
         </table>
@@ -710,6 +715,28 @@ function renderCosts(el) {
       </div>
     </div>`;
 }
+
+// 刪除廚房成本記錄
+window.deleteKitchenCost = async function(id) {
+  if (!confirm('確定要刪除這筆成本記錄嗎？此操作無法復原。')) return;
+  try {
+    await API.deleteKitchenCost(id);
+    UI.toast('✓ 已刪除');
+    // 本地移除並更新統計數字
+    const idx = OwnerApp.data.kitchen.costs.findIndex(c => c.id === id);
+    if (idx >= 0) {
+      const amount = Number(OwnerApp.data.kitchen.costs[idx].amount) || 0;
+      OwnerApp.data.kitchen.costs.splice(idx, 1);
+      OwnerApp.data.kitchen.cost   -= amount;
+      OwnerApp.data.kitchen.profit += amount;
+      const tb = OwnerApp.data.kitchen.totalBarrels;
+      OwnerApp.data.kitchen.avgCostPerBarrel   = tb ? Math.round(OwnerApp.data.kitchen.cost / tb)   : 0;
+      OwnerApp.data.kitchen.avgProfitPerBarrel = tb ? Math.round(OwnerApp.data.kitchen.profit / tb) : 0;
+      UI.cacheSet('dashboard_' + (OwnerApp.queryDate || t()), OwnerApp.data);
+    }
+    showPage('costs');
+  } catch(e) { UI.toast('刪除失敗：' + e.message, 'error'); }
+};
 
 // ═══════════════════════════════════════════════════════════════
 // 設定中心（用快取資料）
@@ -724,6 +751,7 @@ function renderSettings(el) {
       <div class="tab active" data-tab="prices">價格設定</div>
       <div class="tab" data-tab="stalls">攤位設定</div>
       <div class="tab" data-tab="ingredients">配料設定</div>
+      <div class="tab" data-tab="people">人員管理</div>
     </div>
     <div id="set-content"></div>`;
 
@@ -800,7 +828,8 @@ function renderSettings(el) {
             </tbody>
           </table>
         </div>
-      </div>`
+      </div>`,
+    people: renderPeopleTab(s),
   };
 
   const render = (tab) => { $('set-content').innerHTML = tabs[tab]||''; };
@@ -811,3 +840,58 @@ function renderSettings(el) {
   }));
   render('prices');
 }
+
+// 人員管理：回報人清單 / 配發人清單，可在網頁端刪除
+function renderPeopleTab(settings) {
+  const reporters   = String(settings['回報人清單']  || '').split(',').map(s=>s.trim()).filter(Boolean);
+  const dispatchers = String(settings['配發人清單']  || '').split(',').map(s=>s.trim()).filter(Boolean);
+
+  function listHTML(names, listType) {
+    if (!names.length) return noDataHTML();
+    return names.map(n => `
+      <div class="stall-card__row">
+        <span class="stall-card__row-label">${n}</span>
+        <button class="btn btn--sm btn--danger" onclick="deletePersonFromList('${n}','${listType}')" title="刪除">
+          <i class="ti ti-trash"></i>
+        </button>
+      </div>`).join('');
+  }
+
+  return `
+    <div class="alert-row alert-row--warning" style="margin-bottom:12px">
+      <i class="ti ti-info-circle alert-row__icon"></i>
+      <div class="alert-row__body">
+        <strong>說明</strong>
+        <span>刪除後該人員將不再出現在攤位回報 / 廚房配發的選單中。新增人員請至 Google Sheets → 系統設定 工作表編輯「回報人清單」或「配發人清單」。</span>
+      </div>
+    </div>
+    <div class="grid g2" style="gap:16px">
+      <div class="card">
+        <div class="card__header"><div class="card__title"><i class="ti ti-users"></i>攤位回報人清單</div></div>
+        ${listHTML(reporters, 'reporter')}
+      </div>
+      <div class="card">
+        <div class="card__header"><div class="card__title"><i class="ti ti-truck-delivery"></i>廚房配發人清單</div></div>
+        ${listHTML(dispatchers, 'dispatcher')}
+      </div>
+    </div>`;
+}
+
+// 刪除人員（從回報人清單或配發人清單移除）
+window.deletePersonFromList = async function(name, listType) {
+  const label = listType === 'reporter' ? '攤位回報人' : '廚房配發人';
+  if (!confirm(`確定要將「${name}」從${label}清單中移除嗎？`)) return;
+  try {
+    await API.deletePerson(name, listType);
+    UI.toast(`✓ 已移除 ${name}`);
+
+    // 本地更新設定快取
+    const key = listType === 'reporter' ? '回報人清單' : '配發人清單';
+    const names = String(OwnerApp.data.settings[key] || '')
+      .split(',').map(s=>s.trim()).filter(n => n && n !== name);
+    OwnerApp.data.settings[key] = names.join(',');
+    UI.cacheSet('dashboard_' + (OwnerApp.queryDate || t()), OwnerApp.data);
+
+    showPage('settings');
+  } catch(e) { UI.toast('刪除失敗：' + e.message, 'error'); }
+};
