@@ -164,6 +164,7 @@ function renderDispatchList(el) {
       <div class="section-title"><i class="ti ti-truck-delivery"></i>配發記錄</div>
       <div style="display:flex;gap:8px">
         <input type="date" id="disp-date" value="${t()}"
+               onchange="loadDispatchList()"
                style="padding:7px 10px;border:1.5px solid var(--ink-200);border-radius:var(--r-md);font-size:13px;outline:none">
         <button class="btn btn--sm btn--kitchen" onclick="loadDispatchList()">
           <i class="ti ti-refresh"></i> 更新
@@ -494,10 +495,11 @@ function renderWeeklyPlan(el) {
       <div class="section-title"><i class="ti ti-calendar-week"></i>本週工作計畫</div>
       <div style="display:flex;gap:8px;align-items:center">
         <input type="week" id="week-input" value="${weekStr}"
+               onchange="loadWeeklyPlan()"
                style="padding:7px 10px;border:1.5px solid var(--kitchen-card-border);
                       border-radius:var(--r-md);font-size:13px;outline:none;background:var(--white)">
         <button class="btn btn--kitchen btn--sm" onclick="loadWeeklyPlan()">
-          <i class="ti ti-refresh"></i> 切換
+          <i class="ti ti-refresh"></i> 重新整理
         </button>
         <button class="btn btn--kitchen btn--sm" onclick="openAddTaskModal()">
           <i class="ti ti-plus"></i> 新增任務
@@ -997,10 +999,11 @@ function renderMonthlyCal(el) {
       <div class="section-title"><i class="ti ti-calendar-month"></i>月曆</div>
       <div style="display:flex;gap:8px;align-items:center">
         <input type="month" id="month-input" value="${month}"
+               onchange="loadMonthlyCal()"
                style="padding:7px 10px;border:1.5px solid var(--kitchen-card-border);
                       border-radius:var(--r-md);font-size:13px;outline:none;background:var(--white)">
         <button class="btn btn--kitchen btn--sm" onclick="loadMonthlyCal()">
-          <i class="ti ti-refresh"></i> 切換
+          <i class="ti ti-refresh"></i> 重新整理
         </button>
       </div>
     </div>
@@ -1160,10 +1163,11 @@ function renderWasteLog(el) {
       <div class="section-title"><i class="ti ti-history"></i>報廢記錄查詢</div>
       <div style="display:flex;gap:8px">
         <input type="date" id="waste-date" value="${t()}"
+               onchange="loadWasteLogs()"
                style="padding:6px 10px;border:1.5px solid var(--kitchen-card-border);
                       border-radius:var(--r-md);font-size:13px;outline:none;background:var(--white)">
         <button class="btn btn--sm btn--kitchen" onclick="loadWasteLogs()">
-          <i class="ti ti-refresh"></i> 查詢
+          <i class="ti ti-refresh"></i> 重新整理
         </button>
       </div>
     </div>

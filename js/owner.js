@@ -119,9 +119,10 @@ function dateBar(inputId) {
       <div class="section-title"><i class="ti ti-calendar-event"></i>查詢日期</div>
       <div style="display:flex;gap:8px;align-items:center">
         <input type="date" id="${inputId}" value="${OwnerApp.queryDate||t()}"
+               onchange="changeDate('${inputId}')"
                style="padding:7px 10px;border:1.5px solid var(--ink-200);border-radius:var(--r-md);font-size:13px;outline:none">
         <button class="btn btn--primary btn--sm" onclick="changeDate('${inputId}')">
-          <i class="ti ti-refresh"></i> 切換日期
+          <i class="ti ti-refresh"></i> 重新整理
         </button>
       </div>
     </div>`;
@@ -452,7 +453,7 @@ function renderStallPL(el) {
             </div>
             ${s.actualRevenue !== null ? `
             <div class="pl-row">
-              <span class="pl-row__label">攤位實際收款</span>
+              <span class="pl-row__label">老闆登記實際收款</span>
               <span class="pl-row__val ${s.revenueVariance !== 0 ? (s.revenueVariance>0?'c-green':'c-red') : ''}">${fm(s.actualRevenue)}</span>
             </div>
             ${s.revenueVariance !== 0 ? `
@@ -463,12 +464,16 @@ function renderStallPL(el) {
               </span>
             </div>` : ''}` : `
             <div class="pl-row">
-              <span class="pl-row__label td-muted" style="font-style:italic">未填實際收款（採用系統計算）</span>
+              <span class="pl-row__label td-muted" style="font-style:italic">尚未登記實際收款</span>
             </div>`}
             <div class="pl-total">
-              <span class="pl-total__label">總營收${s.actualRevenue!==null?'（採實際）':''}</span>
+              <span class="pl-total__label">總營收${s.actualRevenue!==null?'（採實際收款）':''}</span>
               <span class="pl-total__val c-green">${fm(s.revenue)}</span>
             </div>
+            <button class="btn btn--sm" style="margin-top:8px;width:100%"
+                    onclick="openActualRevenueModal('${s.report_id}','${s.stall_name}',${s.theoreticalRevenue},${s.actualRevenue ?? 'null'})">
+              <i class="ti ti-cash"></i> ${s.actualRevenue !== null ? '修改' : '登記'}實際收款
+            </button>
           </div>
           <div>
             <div class="pl-row">
@@ -495,6 +500,40 @@ function renderStallPL(el) {
         </div>
       </div>`;
   }).join('') || noDataHTML();
+
+  // ── 登記實際收款 Modal ────────────────────────────────────
+  el.innerHTML += `
+    <div id="actual-rev-modal" style="display:none;position:fixed;inset:0;
+         background:rgba(15,23,42,.5);z-index:9999;align-items:center;
+         justify-content:center;backdrop-filter:blur(2px)">
+      <div style="background:var(--white);border-radius:var(--r-xl);padding:28px;
+                  width:90%;max-width:420px;box-shadow:var(--shadow-lg)">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+          <div style="font-size:16px;font-weight:700" id="arm-title">登記實際收款</div>
+          <button onclick="closeActualRevenueModal()"
+                  style="background:none;border:none;font-size:20px;color:var(--ink-400);cursor:pointer">✕</button>
+        </div>
+        <input type="hidden" id="arm-report-id">
+        <div class="field" style="margin-bottom:8px">
+          <label>系統計算金額</label>
+          <input type="text" id="arm-theoretical" readonly
+                 style="padding:10px 12px;border:1.5px solid var(--ink-200);border-radius:var(--r-md);
+                        font-size:16px;width:100%;background:var(--ink-50);color:var(--ink-600)">
+        </div>
+        <div class="field" style="margin-bottom:16px">
+          <label>實際收款金額 *</label>
+          <input type="number" id="arm-actual" min="0" placeholder="請輸入清點後的實際金額"
+                 style="padding:10px 12px;border:1.5px solid var(--ink-200);border-radius:var(--r-md);
+                        font-size:18px;font-weight:700;width:100%;outline:none">
+        </div>
+        <div style="display:flex;gap:8px;justify-content:flex-end">
+          <button class="btn btn--sm" onclick="closeActualRevenueModal()">取消</button>
+          <button class="btn btn--primary btn--sm" id="btn-arm-save" onclick="saveActualRevenueModal()">
+            <i class="ti ti-device-floppy"></i> 儲存
+          </button>
+        </div>
+      </div>
+    </div>`;
 
   // ── 攤位成本輸入（包材等） ────────────────────────────────
   el.innerHTML += `
@@ -581,10 +620,11 @@ async function renderMonthly(el) {
       <div class="section-title"><i class="ti ti-calendar-stats"></i>月報表</div>
       <div style="display:flex;gap:8px;align-items:center">
         <input type="month" id="mr-month" value="${month}"
+               onchange="loadMonthlyReport()"
                style="padding:7px 10px;border:1.5px solid var(--ink-200);
                       border-radius:var(--r-md);font-size:13px;outline:none">
         <button class="btn btn--primary btn--sm" onclick="loadMonthlyReport()">
-          <i class="ti ti-refresh"></i> 查詢
+          <i class="ti ti-refresh"></i> 重新整理
         </button>
       </div>
     </div>
@@ -1053,10 +1093,11 @@ async function renderMonthSetup(el) {
       <div class="section-title"><i class="ti ti-calendar-check"></i>月度設定</div>
       <div style="display:flex;gap:8px;align-items:center">
         <input type="month" id="ms-month" value="${month}"
+               onchange="loadMonthSetup()"
                style="padding:7px 10px;border:1.5px solid var(--ink-200);
                       border-radius:var(--r-md);font-size:13px;outline:none">
         <button class="btn btn--primary btn--sm" onclick="loadMonthSetup()">
-          <i class="ti ti-refresh"></i> 查詢
+          <i class="ti ti-refresh"></i> 重新整理
         </button>
       </div>
     </div>
@@ -1241,9 +1282,10 @@ async function renderClosures(el) {
       <div class="section-title"><i class="ti ti-history"></i>休息記錄查詢</div>
       <div style="display:flex;gap:8px">
         <input type="month" id="closure-month" value="${UI.monthISO()}"
+               onchange="loadClosures()"
                style="padding:7px 10px;border:1.5px solid var(--ink-200);border-radius:var(--r-md);font-size:13px;outline:none">
         <button class="btn btn--primary btn--sm" onclick="loadClosures()">
-          <i class="ti ti-refresh"></i> 查詢
+          <i class="ti ti-refresh"></i> 重新整理
         </button>
       </div>
     </div>
@@ -1314,4 +1356,37 @@ window.deleteClosureItem = async function(id) {
     UI.toast('✓ 已刪除');
     loadClosures();
   } catch(e) { UI.toast('刪除失敗：' + e.message, 'error'); }
+};
+
+// ── 登記實際收款 Modal 處理 ───────────────────────────────────
+window.openActualRevenueModal = function(reportId, stallName, theoretical, currentActual) {
+  $('arm-title').textContent = `${stallName} — 登記實際收款`;
+  $('arm-report-id').value = reportId;
+  $('arm-theoretical').value = `$${Number(theoretical).toLocaleString('zh-TW')}`;
+  $('arm-actual').value = currentActual !== null && currentActual !== undefined ? currentActual : '';
+  $('actual-rev-modal').style.display = 'flex';
+  setTimeout(() => $('arm-actual')?.focus(), 100);
+};
+
+window.closeActualRevenueModal = function() {
+  const m = $('actual-rev-modal'); if (m) m.style.display = 'none';
+};
+
+window.saveActualRevenueModal = async function() {
+  const reportId = $('arm-report-id').value;
+  const amount   = $('arm-actual').value;
+  if (!reportId) { UI.toast('找不到對應的回報記錄', 'error'); return; }
+  if (amount === '' || Number(amount) < 0) { UI.toast('請輸入有效金額', 'error'); return; }
+
+  const btn = $('btn-arm-save');
+  UI.btnLoad(btn, true);
+  try {
+    await API.saveActualRevenue(reportId, amount);
+    UI.toast('✓ 已登記實際收款');
+    closeActualRevenueModal();
+    // 重新抓取當天資料以反映最新差異計算
+    await fetchDashboard(OwnerApp.queryDate || t());
+    showPage('stall-pl');
+  } catch(e) { UI.toast('儲存失敗：' + e.message, 'error'); }
+  finally { UI.btnLoad(btn, false); }
 };
