@@ -19,6 +19,8 @@ const PAGE_TITLES = {
   inventory:    '庫存總覽',
   costs:        '成本管理',
   settings:     '設定中心',
+  'month-setup':'月度設定',
+  closures:     '休息日管理',
 };
 
 // ── 工具 ──────────────────────────────────────────────────────
@@ -105,6 +107,8 @@ function showPage(page) {
     inventory:    renderInventory,
     costs:        renderCosts,
     settings:     renderSettings,
+    'month-setup':renderMonthSetup,
+    closures:     renderClosures,
   }[page] || (() => {}))(body);
 }
 
@@ -893,5 +897,278 @@ window.deletePersonFromList = async function(name, listType) {
     UI.cacheSet('dashboard_' + (OwnerApp.queryDate || t()), OwnerApp.data);
 
     showPage('settings');
+  } catch(e) { UI.toast('刪除失敗：' + e.message, 'error'); }
+};
+
+// ═══════════════════════════════════════════════════════════════
+// 月度設定（攤位營業天數、租金分攤）
+// ═══════════════════════════════════════════════════════════════
+async function renderMonthSetup(el) {
+  const month = UI.monthISO();
+  el.innerHTML = `
+    <div class="section-header" style="margin-bottom:20px">
+      <div class="section-title"><i class="ti ti-calendar-check"></i>月度設定</div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input type="month" id="ms-month" value="${month}"
+               style="padding:7px 10px;border:1.5px solid var(--ink-200);
+                      border-radius:var(--r-md);font-size:13px;outline:none">
+        <button class="btn btn--primary btn--sm" onclick="loadMonthSetup()">
+          <i class="ti ti-refresh"></i> 查詢
+        </button>
+      </div>
+    </div>
+
+    <div class="alert-row alert-row--warning" style="margin-bottom:16px">
+      <i class="ti ti-info-circle alert-row__icon"></i>
+      <div class="alert-row__body">
+        <strong>說明</strong>
+        <span>系統依攤位設定的「營業規律」自動計算每月應營業天數及每日分攤金額。如有颱風等臨時休息，請至「休息日管理」登記，月底再點「確認月結」鎖定實際天數。</span>
+      </div>
+    </div>
+
+    <div id="ms-content">${spinnerHTML()}</div>`;
+  loadMonthSetup();
+}
+
+window.loadMonthSetup = async function() {
+  const month = $('ms-month')?.value || UI.monthISO();
+  const c = $('ms-content'); if (!c) return;
+  c.innerHTML = spinnerHTML();
+  try {
+    const [costRes, summaryRes] = await Promise.all([
+      API.getMonthlyCost(month),
+      API.getMonthSummary(month),
+    ]);
+    const costs   = costRes.data   || [];
+    const summary = summaryRes.data || [];
+
+    const dayNames = ['','週一','週二','週三','週四','週五','週六','週日'];
+
+    c.innerHTML = `
+      <div class="grid g2" style="gap:16px;margin-bottom:20px">
+        ${summary.map(s => {
+          const needsAdj = s.closure_count > 0;
+          return `
+            <div class="card">
+              <div class="card__header">
+                <div class="card__title"><i class="ti ti-store"></i>${s.stall_name}</div>
+                <span class="badge ${needsAdj ? 'badge--amber' : 'badge--green'}">
+                  ${needsAdj ? `⚠ 有 ${s.closure_count} 天休息` : '✓ 正常'}
+                </span>
+              </div>
+
+              <div class="pl-row">
+                <span class="pl-row__label">租金模式</span>
+                <span class="pl-row__val">
+                  ${s.rent_mode === '日租'
+                    ? `日租（每日固定）`
+                    : '月租（固定總額）'}
+                </span>
+              </div>
+              <div class="pl-row">
+                <span class="pl-row__label">本月應營業天數</span>
+                <span class="pl-row__val font-num">${s.scheduled_days} 天</span>
+              </div>
+              <div class="pl-row">
+                <span class="pl-row__label">實際營業天數</span>
+                <span class="pl-row__val font-num ${needsAdj ? 'c-amber' : ''}">${s.actual_days} 天</span>
+              </div>
+              <div class="pl-row">
+                <span class="pl-row__label">月租金總額</span>
+                <span class="pl-row__val font-num">${fm(s.monthly_rent)}</span>
+              </div>
+              <div class="pl-row">
+                <span class="pl-row__label">每日租金分攤（用預計天數）</span>
+                <span class="pl-row__val font-num">${fm(s.daily_rent_scheduled)}/天</span>
+              </div>
+              ${needsAdj ? `
+              <div class="pl-row">
+                <span class="pl-row__label">月結後每日分攤（用實際天數）</span>
+                <span class="pl-row__val font-num c-amber">${fm(s.daily_rent_actual)}/天</span>
+              </div>` : ''}
+
+              ${needsAdj ? `
+              <div style="margin-top:12px">
+                <button class="btn btn--primary btn--sm btn--full"
+                        onclick="confirmMonthClose('${s.stall_id}','${month}')">
+                  <i class="ti ti-lock"></i> 確認月結（用實際 ${s.actual_days} 天）
+                </button>
+              </div>` : `
+              <div style="margin-top:12px">
+                <button class="btn btn--sm btn--full"
+                        onclick="confirmMonthClose('${s.stall_id}','${month}')">
+                  <i class="ti ti-check"></i> 確認月結
+                </button>
+              </div>`}
+            </div>`;
+        }).join('')}
+      </div>
+
+      <!-- 全部月結按鈕 -->
+      <div class="btn-row btn-row--center">
+        <button class="btn btn--primary btn--lg" onclick="confirmAllMonthClose('${month}')">
+          <i class="ti ti-lock"></i> 一鍵月結所有攤位（${month}）
+        </button>
+      </div>`;
+  } catch(e) { c.innerHTML = errHTML(e); }
+};
+
+window.confirmMonthClose = async function(stallId, month) {
+  const summary = await API.getMonthSummary(month);
+  const s = summary.data.find(x => x.stall_id === stallId);
+  if (!s) return;
+  const msg = s.closure_count > 0
+    ? `確認 ${s.stall_name} ${month} 月結？\n本月有 ${s.closure_count} 天休息\n實際天數：${s.actual_days} 天\n月結後每日分攤：${fm(s.daily_rent_actual)}/天`
+    : `確認 ${s.stall_name} ${month} 月結？（${s.scheduled_days} 天，無臨時休息）`;
+  if (!confirm(msg)) return;
+  try {
+    await API.saveMonthlyCost({
+      month, stall_id: s.stall_id, stall_name: s.stall_name,
+      rent_mode: s.rent_mode, scheduled_days: s.scheduled_days,
+      actual_days: s.actual_days, monthly_rent: s.monthly_rent,
+      monthly_fixed: s.monthly_fixed,
+      daily_rent: s.daily_rent_actual, daily_fixed: s.daily_fixed_actual,
+    });
+    UI.toast(`✓ ${s.stall_name} 月結完成`);
+    loadMonthSetup();
+  } catch(e) { UI.toast('月結失敗：' + e.message, 'error'); }
+};
+
+window.confirmAllMonthClose = async function(month) {
+  if (!confirm(`確認 ${month} 全部攤位月結？月結後本月每日分攤金額將鎖定，不再隨天數自動計算。`)) return;
+  const summary = await API.getMonthSummary(month);
+  let success = 0;
+  for (const s of summary.data) {
+    try {
+      await API.saveMonthlyCost({
+        month, stall_id: s.stall_id, stall_name: s.stall_name,
+        rent_mode: s.rent_mode, scheduled_days: s.scheduled_days,
+        actual_days: s.actual_days, monthly_rent: s.monthly_rent,
+        monthly_fixed: s.monthly_fixed,
+        daily_rent: s.daily_rent_actual, daily_fixed: s.daily_fixed_actual,
+      });
+      success++;
+    } catch(e) {}
+  }
+  UI.toast(`✓ 已完成 ${success} 個攤位月結`);
+  loadMonthSetup();
+};
+
+// ═══════════════════════════════════════════════════════════════
+// 休息日管理（颱風、臨時休息）
+// ═══════════════════════════════════════════════════════════════
+async function renderClosures(el) {
+  const stalls = OwnerApp.data?.stalls || [];
+  el.innerHTML = `
+    <div class="section-title" style="margin-bottom:16px"><i class="ti ti-beach"></i>新增休息記錄</div>
+    <div class="card" style="margin-bottom:24px;max-width:600px">
+      <form id="closure-form" novalidate>
+        <div class="fg fg3" style="margin-bottom:12px">
+          <div class="field"><label>日期 *</label>
+            <input type="date" name="date" value="${t()}">
+          </div>
+          <div class="field"><label>攤位 *</label>
+            <select name="stall_id" id="closure-stall">
+              <option value="">全部攤位</option>
+              ${stalls.map(s=>`<option value="${s.stall_id}">${s.stall_name}</option>`).join('')}
+            </select>
+          </div>
+          <div class="field"><label>原因</label>
+            <select name="reason">
+              <option value="颱風">🌀 颱風</option>
+              <option value="臨時休息">🏖 臨時休息</option>
+              <option value="設備維修">🔧 設備維修</option>
+              <option value="家庭因素">👨‍👩‍👧 家庭因素</option>
+              <option value="其他">其他</option>
+            </select>
+          </div>
+        </div>
+        <div class="field" style="margin-bottom:12px"><label>備註</label>
+          <input type="text" name="note" placeholder="選填">
+        </div>
+        <div class="btn-row">
+          <button type="submit" class="btn btn--primary" id="btn-closure">
+            <i class="ti ti-plus"></i> 新增休息記錄
+          </button>
+        </div>
+      </form>
+    </div>
+
+    <div class="section-header" style="margin-bottom:12px">
+      <div class="section-title"><i class="ti ti-history"></i>休息記錄查詢</div>
+      <div style="display:flex;gap:8px">
+        <input type="month" id="closure-month" value="${UI.monthISO()}"
+               style="padding:7px 10px;border:1.5px solid var(--ink-200);border-radius:var(--r-md);font-size:13px;outline:none">
+        <button class="btn btn--primary btn--sm" onclick="loadClosures()">
+          <i class="ti ti-refresh"></i> 查詢
+        </button>
+      </div>
+    </div>
+    <div id="closure-list">${spinnerHTML()}</div>`;
+
+  $('closure-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const data = UI.formData(e.target);
+    const stallSel = $('closure-stall');
+
+    // 支援「全部攤位」一次新增
+    const stallsToAdd = data.stall_id
+      ? [{ stall_id: data.stall_id, stall_name: stallSel.selectedOptions[0]?.text || '' }]
+      : stalls.map(s => ({ stall_id: s.stall_id, stall_name: s.stall_name }));
+
+    const btn = $('btn-closure');
+    UI.btnLoad(btn, true);
+    try {
+      for (const stall of stallsToAdd) {
+        await API.saveClosure({ ...data, stall_id: stall.stall_id, stall_name: stall.stall_name });
+      }
+      UI.toast(`✓ 已新增 ${stallsToAdd.length} 筆休息記錄`);
+      UI.resetForm(e.target);
+      e.target.querySelector('[name="date"]').value = t();
+      loadClosures();
+    } catch(err) { UI.toast(err.message, 'error'); }
+    finally { UI.btnLoad(btn, false); }
+  });
+
+  loadClosures();
+}
+
+window.loadClosures = async function() {
+  const month = $('closure-month')?.value || UI.monthISO();
+  const c = $('closure-list'); if (!c) return;
+  c.innerHTML = spinnerHTML();
+  try {
+    const res  = await API.getClosureLogs('', month);
+    const rows = res.data || [];
+    if (!rows.length) {
+      c.innerHTML = `<div class="card"><div class="empty"><i class="ti ti-sun"></i><p>本月無休息記錄</p></div></div>`;
+      return;
+    }
+    c.innerHTML = `<div class="card"><div class="table-wrap"><table>
+      <thead><tr><th>日期</th><th>攤位</th><th>原因</th><th>備註</th><th></th></tr></thead>
+      <tbody>${rows.map(r=>`<tr>
+        <td>${r.date}</td>
+        <td><strong>${r.stall_name}</strong></td>
+        <td><span class="badge badge--amber">${r.reason}</span></td>
+        <td class="td-muted">${r.note||'—'}</td>
+        <td style="text-align:right">
+          <button class="btn btn--sm btn--danger" onclick="deleteClosureItem('${r.id}')" title="刪除">
+            <i class="ti ti-trash"></i>
+          </button>
+        </td>
+      </tr>`).join('')}</tbody>
+    </table></div>
+    <div style="padding:10px 14px;font-size:12px;color:var(--ink-500)">
+      共 ${rows.length} 筆休息記錄｜刪除後需重新月結才會更新分攤金額
+    </div></div>`;
+  } catch(e) { c.innerHTML = errHTML(e); }
+};
+
+window.deleteClosureItem = async function(id) {
+  if (!confirm('確定要刪除這筆休息記錄嗎？')) return;
+  try {
+    await API.deleteClosure(id);
+    UI.toast('✓ 已刪除');
+    loadClosures();
   } catch(e) { UI.toast('刪除失敗：' + e.message, 'error'); }
 };

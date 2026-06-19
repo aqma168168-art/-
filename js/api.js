@@ -66,6 +66,14 @@ const API = (() => {
     return call('getKitchenInit', { date });
   }
 
+  // 月度成本設定 & 休息記錄
+  async function getMonthlyCost(month)      { return call('getMonthlyCost',  { month }); }
+  async function saveMonthlyCost(data)      { return call('saveMonthlyCost', {}, data); }
+  async function getClosureLogs(date, month){ return call('getClosureLogs',  { date, month }); }
+  async function saveClosure(data)          { return call('saveClosure',      {}, data); }
+  async function deleteClosure(id)          { return call('deleteClosure',    {}, { id }); }
+  async function getMonthSummary(month)     { return call('getMonthSummary', { month }); }
+
   // 工作項目庫 & 新增週計畫任務
   async function getTaskLibrary()    { return call('getTaskLibrary'); }
   async function saveWeeklyTask(data){ return call('saveWeeklyTask', {}, data); }
@@ -99,6 +107,9 @@ const API = (() => {
 
   return {
     call,
+    getMonthlyCost, saveMonthlyCost,
+    getClosureLogs, saveClosure, deleteClosure,
+    getMonthSummary,
     getOwnerDashboard,
     getKitchenInit,
     getStallFormOptions,

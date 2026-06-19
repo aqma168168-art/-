@@ -27,6 +27,7 @@ const K_TITLES = {
   'waste-log':   '廚房報廢',
   inventory:     '庫存管理',
   'cost-input':  '成本輸入',
+  'mark-closure':'標記今日休息',
 };
 
 // ── 初始化：localStorage 快取設定 → 立即顯示，背景刷新 ──────
@@ -136,6 +137,7 @@ function showPage(page) {
     'waste-log':   () => renderWasteLog(body),
     inventory:     () => renderInventory(body),
     'cost-input':  () => renderCostInput(body),
+    'mark-closure':() => renderMarkClosure(body),
   };
   const fn = pages[page];
   if (fn) fn();
@@ -1431,5 +1433,117 @@ async function loadTodayCosts() {
           </tr>`).join('')}</tbody>
         </table></div>
       </div>`;
+  } catch(e) { c.innerHTML = errHTML(e); }
+}
+
+// ═══════════════════════════════════════════════════════════════
+// 標記休息日（颱風、臨時休息）
+// ═══════════════════════════════════════════════════════════════
+function renderMarkClosure(el) {
+  const stalls = KitchenApp.cache.stalls || [];
+  el.innerHTML = `
+    <div class="section-title" style="margin-bottom:16px">
+      <i class="ti ti-beach"></i>標記今日休息
+    </div>
+    <div class="card card--kitchen" style="max-width:560px;margin-bottom:20px">
+      <div class="alert-row alert-row--warning" style="margin-bottom:14px">
+        <i class="ti ti-info-circle alert-row__icon"></i>
+        <div class="alert-row__body"><strong>說明</strong>
+          <span>颱風或臨時休息時，在這裡登記。老闆可在「月度設定」頁看到並月結時自動調整分攤金額。</span>
+        </div>
+      </div>
+      <form id="k-closure-form" novalidate>
+        <div class="fg fg2" style="margin-bottom:12px">
+          <div class="field"><label>日期 *</label>
+            <input type="date" name="date" value="${t()}">
+          </div>
+          <div class="field"><label>原因 *</label>
+            <select name="reason">
+              <option value="颱風">🌀 颱風</option>
+              <option value="臨時休息">🏖 臨時休息</option>
+              <option value="設備維修">🔧 設備維修</option>
+              <option value="家庭因素">👨‍👩‍👧 家庭因素</option>
+              <option value="其他">其他</option>
+            </select>
+          </div>
+        </div>
+        <div class="field" style="margin-bottom:14px"><label>備註</label>
+          <input type="text" name="note" placeholder="例：颱風天警戒，全部攤位休息">
+        </div>
+
+        <div style="margin-bottom:14px">
+          <label style="font-size:12px;font-weight:600;color:var(--ink-700);display:block;margin-bottom:8px">
+            選擇攤位（可多選，不選代表全部）
+          </label>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+            ${stalls.map(s=>`
+              <label style="display:flex;align-items:center;gap:8px;padding:8px 12px;
+                            background:var(--kitchen-section-head);border-radius:var(--r-md);
+                            cursor:pointer;border:1.5px solid var(--kitchen-card-border)">
+                <input type="checkbox" name="stall_ids" value="${s.stall_id}"
+                       data-name="${s.stall_name}"
+                       style="width:16px;height:16px;accent-color:var(--kitchen-sidebar-accent)">
+                <span style="font-size:13px;font-weight:500">${s.stall_name}</span>
+              </label>`).join('')}
+          </div>
+        </div>
+
+        <div class="btn-row">
+          <button type="submit" class="btn btn--kitchen" id="btn-k-closure">
+            <i class="ti ti-beach"></i> 標記休息
+          </button>
+        </div>
+      </form>
+    </div>
+
+    <div class="section-title" style="margin-bottom:12px">
+      <i class="ti ti-history"></i>今日休息記錄
+    </div>
+    <div id="today-closures" class="card card--kitchen">${spinHTML()}</div>`;
+
+  $('k-closure-form').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const data = UI.formData(e.target);
+    const checkedBoxes = [...e.target.querySelectorAll('[name="stall_ids"]:checked')];
+    const stallsToMark = checkedBoxes.length > 0
+      ? checkedBoxes.map(cb => ({ stall_id: cb.value, stall_name: cb.dataset.name }))
+      : (KitchenApp.cache.stalls || []).map(s => ({ stall_id: s.stall_id, stall_name: s.stall_name }));
+
+    const btn = $('btn-k-closure');
+    UI.btnLoad(btn, true);
+    try {
+      let added = 0;
+      for (const stall of stallsToMark) {
+        try {
+          await API.saveClosure({ date: data.date, reason: data.reason, note: data.note,
+            stall_id: stall.stall_id, stall_name: stall.stall_name });
+          added++;
+        } catch(e) { /* 可能重複，忽略 */ }
+      }
+      UI.toast(`✓ 已標記 ${added} 個攤位休息`);
+      UI.resetForm(e.target);
+      e.target.querySelector('[name="date"]').value = t();
+      loadTodayClosures();
+    } catch(err) { UI.toast(err.message, 'error'); }
+    finally { UI.btnLoad(btn, false); }
+  });
+
+  loadTodayClosures();
+}
+
+async function loadTodayClosures() {
+  const c = $('today-closures'); if (!c) return;
+  try {
+    const res  = await API.getClosureLogs(t(), '');
+    const rows = res.data || [];
+    if (!rows.length) {
+      c.innerHTML = `<div class="empty" style="padding:16px"><i class="ti ti-sun"></i><p>今日無休息記錄</p></div>`;
+      return;
+    }
+    c.innerHTML = rows.map(r=>`
+      <div class="stall-card__row">
+        <span class="stall-card__row-label"><strong>${r.stall_name}</strong> — ${r.reason}</span>
+        <span class="td-muted">${r.note||''}</span>
+      </div>`).join('');
   } catch(e) { c.innerHTML = errHTML(e); }
 }
