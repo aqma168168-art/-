@@ -240,6 +240,7 @@ function stallCard(s, prices) {
       </div>
       <div class="stall-card__body">
         <div class="stall-card__row"><span class="stall-card__row-label">今日營收</span><span class="stall-card__row-val c-green font-num">${fm(s.revenue)}</span></div>
+        ${s.actualRevenue !== null && s.revenueVariance !== 0 ? `<div class="stall-card__row"><span class="stall-card__row-label">金額差異</span><span class="stall-card__row-val ${s.revenueVariance>0?'c-green':'c-red'} font-num">${s.revenueVariance>0?'+':''}${fm(s.revenueVariance)}</span></div>` : ''}
         <div class="stall-card__row"><span class="stall-card__row-label">今日淨利</span><span class="stall-card__row-val ${UI.moneyClass(s.netProfit)} font-num">${fm(s.netProfit)}</span></div>
         <div class="stall-card__row"><span class="stall-card__row-label">桶數</span><span class="stall-card__row-val">${s.barrels} 桶</span></div>
         <div class="stall-card__row"><span class="stall-card__row-label">大碗 / 小碗</span><span class="stall-card__row-val">${fn(s.big_bowls)} / ${fn(s.small_bowls)}</span></div>
@@ -426,6 +427,10 @@ function renderStallPL(el) {
                   style="font-size:13px;padding:5px 12px">
               今日淨利 ${fm(s.netProfit)}
             </span>
+            ${s.actualRevenue !== null && s.revenueVariance !== 0 ? `
+            <span class="badge ${s.revenueVariance>0?'badge--green':'badge--red'}" style="font-size:12px;padding:4px 10px">
+              金額差異 ${s.revenueVariance>0?'+':''}${fm(s.revenueVariance)}
+            </span>` : ''}
             ${monthly ? `<span class="badge badge--violet" style="font-size:12px;padding:4px 10px">
               本月淨利 ${fm(monthly.monthNetProfit)}
             </span>` : ''}
@@ -441,8 +446,27 @@ function renderStallPL(el) {
               <span class="pl-row__label">小碗 ${fn(s.small_bowls)} × ${fm(d.prices.smallBowlPrice)}</span>
               <span class="pl-row__val c-green">${fm(s.small_bowls*d.prices.smallBowlPrice)}</span>
             </div>
+            <div class="pl-row">
+              <span class="pl-row__label">系統計算營收</span>
+              <span class="pl-row__val">${fm(s.theoreticalRevenue)}</span>
+            </div>
+            ${s.actualRevenue !== null ? `
+            <div class="pl-row">
+              <span class="pl-row__label">攤位實際收款</span>
+              <span class="pl-row__val ${s.revenueVariance !== 0 ? (s.revenueVariance>0?'c-green':'c-red') : ''}">${fm(s.actualRevenue)}</span>
+            </div>
+            ${s.revenueVariance !== 0 ? `
+            <div class="pl-row">
+              <span class="pl-row__label">差異</span>
+              <span class="pl-row__val ${s.revenueVariance>0?'c-green':'c-red'}">
+                ${s.revenueVariance>0?'+':''}${fm(s.revenueVariance)}
+              </span>
+            </div>` : ''}` : `
+            <div class="pl-row">
+              <span class="pl-row__label td-muted" style="font-style:italic">未填實際收款（採用系統計算）</span>
+            </div>`}
             <div class="pl-total">
-              <span class="pl-total__label">總營收</span>
+              <span class="pl-total__label">總營收${s.actualRevenue!==null?'（採實際）':''}</span>
               <span class="pl-total__val c-green">${fm(s.revenue)}</span>
             </div>
           </div>
@@ -550,15 +574,134 @@ function renderStallPL(el) {
 // ═══════════════════════════════════════════════════════════════
 // 月報表
 // ═══════════════════════════════════════════════════════════════
-function renderMonthly(el) {
+async function renderMonthly(el) {
+  const month = UI.monthISO();
   el.innerHTML = `
-    <div class="card" style="max-width:520px">
-      <div class="alert-row alert-row--warning" style="margin-bottom:0">
-        <i class="ti ti-info-circle alert-row__icon"></i>
-        <div class="alert-row__body">
-          <strong>月報表（第五階段實作）</strong>
-          <span>目前系統已逐日記錄所有數據，月報彙整功能將在第五階段開發。</span>
+    <div class="section-header" style="margin-bottom:20px">
+      <div class="section-title"><i class="ti ti-calendar-stats"></i>月報表</div>
+      <div style="display:flex;gap:8px;align-items:center">
+        <input type="month" id="mr-month" value="${month}"
+               style="padding:7px 10px;border:1.5px solid var(--ink-200);
+                      border-radius:var(--r-md);font-size:13px;outline:none">
+        <button class="btn btn--primary btn--sm" onclick="loadMonthlyReport()">
+          <i class="ti ti-refresh"></i> 查詢
+        </button>
+      </div>
+    </div>
+    <div id="mr-content">${spinnerHTML()}</div>`;
+  loadMonthlyReport();
+}
+
+window.loadMonthlyReport = async function() {
+  const month = $('mr-month')?.value || UI.monthISO();
+  const c = $('mr-content'); if (!c) return;
+  c.innerHTML = spinnerHTML();
+  try {
+    const res = await API.getMonthlyReport(month);
+    const d   = res.data;
+    const heroClass = d.totals.grandTotalProfit >= 0 ? 'hero-card--profit' : 'hero-card--loss';
+
+    c.innerHTML = `
+      <!-- 全店總覽 -->
+      <div class="hero-card ${heroClass}" style="margin-bottom:24px">
+        <div class="hero-card__label">${month} 全店總淨利（廚房毛利＋各攤淨利）</div>
+        <div class="hero-card__value">${fm(d.totals.grandTotalProfit)}</div>
+        <div class="hero-card__sub">
+          廚房毛利 ${fm(d.kitchen.profit)} ／ 攤位總淨利 ${fm(d.totals.allStallsNetProfit)} ／ 攤位總營收 ${fm(d.totals.allStallsRevenue)}
         </div>
+        <i class="ti ti-calendar-stats hero-card__bg-icon"></i>
+      </div>
+
+      <!-- 中央廚房月損益 -->
+      <div class="section-title" style="margin-bottom:12px"><i class="ti ti-building-factory-2"></i>中央廚房本月損益</div>
+      <div class="grid g4" style="margin-bottom:24px">
+        <div class="stat-card stat-card--sky">
+          <div class="stat-card__label">配發桶數</div>
+          <div class="stat-card__value font-num">${d.kitchen.totalBarrels}</div>
+        </div>
+        <div class="stat-card stat-card--green">
+          <div class="stat-card__label">本月收入</div>
+          <div class="stat-card__value font-num c-green">${fm(d.kitchen.revenue)}</div>
+        </div>
+        <div class="stat-card stat-card--red">
+          <div class="stat-card__label">本月成本</div>
+          <div class="stat-card__value font-num c-red">${fm(d.kitchen.cost)}</div>
+        </div>
+        <div class="stat-card stat-card--violet">
+          <div class="stat-card__label">本月毛利</div>
+          <div class="stat-card__value font-num ${UI.moneyClass(d.kitchen.profit)}">${fm(d.kitchen.profit)}</div>
+          <div class="stat-card__sub">每桶均毛利 ${fm(d.kitchen.avgProfitPerBarrel)}</div>
+        </div>
+      </div>
+
+      <!-- 廚房成本分類 -->
+      <div class="card" style="margin-bottom:24px">
+        <div class="card__header"><div class="card__title"><i class="ti ti-chart-pie"></i>廚房成本分類</div></div>
+        ${Object.keys(d.kitchen.costByType).length === 0 ? noDataHTML() :
+          Object.entries(d.kitchen.costByType).map(([type, amount]) => `
+            <div class="pl-row">
+              <span class="pl-row__label">${type}</span>
+              <span class="pl-row__val c-red">${fm(amount)}</span>
+            </div>`).join('')}
+      </div>
+
+      <!-- 各攤位月損益 -->
+      <div class="section-title" style="margin-bottom:12px"><i class="ti ti-chart-bar"></i>各攤位本月損益</div>
+      <div class="grid g2" style="gap:16px;margin-bottom:24px">
+        ${d.stalls.map(s => stallMonthlyCard(s)).join('')}
+      </div>
+
+      <!-- 攤位排行 -->
+      <div class="section-title" style="margin-bottom:12px"><i class="ti ti-trophy"></i>攤位淨利排行</div>
+      <div class="card">
+        <div class="table-wrap"><table>
+          <thead><tr><th>排名</th><th>攤位</th><th>本月淨利</th><th>本月營收</th><th>營業天數</th><th>平均每日淨利</th></tr></thead>
+          <tbody>
+            ${[...d.stalls].sort((a,b)=>b.net_profit-a.net_profit).map((s,i) => `
+              <tr>
+                <td>
+                  ${i===0 ? '🥇' : i===1 ? '🥈' : i===2 ? '🥉' : (i+1)}
+                </td>
+                <td><strong>${s.stall_name}</strong></td>
+                <td class="td-num ${UI.moneyClass(s.net_profit)}">${fm(s.net_profit)}</td>
+                <td class="td-num">${fm(s.total_revenue)}</td>
+                <td class="td-num">${s.report_days} / ${s.scheduled_days} 天</td>
+                <td class="td-num ${UI.moneyClass(s.avg_daily_profit)}">${fm(s.avg_daily_profit)}</td>
+              </tr>`).join('')}
+          </tbody>
+        </table></div>
+      </div>`;
+  } catch(e) { c.innerHTML = errHTML(e); }
+};
+
+function stallMonthlyCard(s) {
+  const needsAttention = s.closure_count > 0 || s.report_days < s.scheduled_days;
+  return `
+    <div class="card">
+      <div class="card__header">
+        <div class="card__title"><i class="ti ti-store"></i>${s.stall_name}</div>
+        <span class="badge ${s.net_profit>=0?'badge--green':'badge--red'}">${fm(s.net_profit)}</span>
+      </div>
+      ${needsAttention ? `
+      <div class="alert-row alert-row--warning" style="margin-bottom:10px;padding:8px 12px">
+        <i class="ti ti-info-circle alert-row__icon" style="font-size:14px"></i>
+        <div class="alert-row__body" style="font-size:12px">
+          應營業 ${s.scheduled_days} 天，實際回報 ${s.report_days} 天
+          ${s.closure_count > 0 ? `（含 ${s.closure_count} 天標記休息）` : ''}
+        </div>
+      </div>` : ''}
+      <div class="pl-row"><span class="pl-row__label">本月營收</span><span class="pl-row__val c-green">${fm(s.total_revenue)}</span></div>
+      <div class="pl-row"><span class="pl-row__label">進貨成本</span><span class="pl-row__val c-red">${fm(s.total_cogs)}</span></div>
+      <div class="pl-row"><span class="pl-row__label">租金分攤（${s.rent_mode}）</span><span class="pl-row__val c-red">${fm(s.total_rent_alloc)}</span></div>
+      <div class="pl-row"><span class="pl-row__label">固定成本分攤</span><span class="pl-row__val c-red">${fm(s.total_fixed_alloc)}</span></div>
+      <div class="pl-row"><span class="pl-row__label">其他成本</span><span class="pl-row__val c-red">${fm(s.total_extras)}</span></div>
+      <div class="pl-total">
+        <span class="pl-total__label">本月淨利</span>
+        <span class="pl-total__val ${UI.moneyClass(s.net_profit)}">${fm(s.net_profit)}</span>
+      </div>
+      <div class="stall-card__footer" style="margin-top:8px;border-radius:var(--r-md)">
+        <span>大碗 ${fn(s.total_big_bowls)} · 小碗 ${fn(s.total_small_bowls)} · ${s.total_barrels}桶</span>
+        <span>平均每日淨利 ${fm(s.avg_daily_profit)}</span>
       </div>
     </div>`;
 }

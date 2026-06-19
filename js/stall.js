@@ -132,6 +132,31 @@ function buildForm(opts) {
   document.querySelectorAll('.rem-field select').forEach(sel => {
     sel.innerHTML = remOpts;
   });
+
+  // 大碗/小碗輸入時，即時顯示系統計算的理論金額
+  const bigInput   = document.getElementById('s-big');
+  const smallInput = document.getElementById('s-small');
+  if (bigInput && !bigInput.dataset.bound) {
+    bigInput.addEventListener('input', updateTheoreticalRevenue);
+    smallInput.addEventListener('input', updateTheoreticalRevenue);
+    bigInput.dataset.bound = '1';
+  }
+  updateTheoreticalRevenue(); // 初始顯示
+}
+
+// 即時計算「系統計算金額」提示文字
+function updateTheoreticalRevenue() {
+  const big   = Number(document.getElementById('s-big')?.value || 0);
+  const small = Number(document.getElementById('s-small')?.value || 0);
+  const bigPrice   = StallApp.opts?.bigBowlPrice   || 0;
+  const smallPrice = StallApp.opts?.smallBowlPrice || 0;
+  const total = big * bigPrice + small * smallPrice;
+
+  const hint = document.getElementById('theoretical-hint');
+  if (hint) hint.textContent = `（系統計算：$${total.toLocaleString('zh-TW')}）`;
+
+  const actualInput = document.getElementById('s-actual-revenue');
+  if (actualInput) actualInput.placeholder = `系統計算為 $${total.toLocaleString('zh-TW')}，若不同才需填寫`;
 }
 
 // ── 時間自動格式化 ────────────────────────────────────────────
@@ -224,10 +249,17 @@ async function submitStallReport() {
     document.getElementById('submit-bar').style.display   = 'none';
     const done   = document.getElementById('stall-done');
     const detail = document.getElementById('stall-done-detail');
+    const bigPrice   = StallApp.opts?.bigBowlPrice   || 0;
+    const smallPrice = StallApp.opts?.smallBowlPrice || 0;
+    const theoretical = Number(data.big_bowls||0)*bigPrice + Number(data.small_bowls||0)*smallPrice;
+    const actual = data.actual_revenue ? Number(data.actual_revenue) : null;
+
     detail.innerHTML = `
       <strong>${stall?.stall_name||''}</strong> 今日回報已送出<br>
       ${UI.fmtDate(data.date)}・${data.sold_out_time} 賣完<br>
-      桶數 ${barrels}・大碗 ${data.big_bowls}・小碗 ${data.small_bowls}
+      桶數 ${barrels}・大碗 ${data.big_bowls}・小碗 ${data.small_bowls}<br>
+      系統計算金額：$${theoretical.toLocaleString('zh-TW')}
+      ${actual !== null ? `<br>實際收款金額：$${actual.toLocaleString('zh-TW')}` : ''}
     `;
     done.classList.add('show');
   } catch(e) {

@@ -73,6 +73,7 @@ const API = (() => {
   async function saveClosure(data)          { return call('saveClosure',      {}, data); }
   async function deleteClosure(id)          { return call('deleteClosure',    {}, { id }); }
   async function getMonthSummary(month)     { return call('getMonthSummary', { month }); }
+  async function getMonthlyReport(month)    { return call('getMonthlyReport', { month }); }
 
   // 工作項目庫 & 新增週計畫任務
   async function getTaskLibrary()    { return call('getTaskLibrary'); }
@@ -110,6 +111,7 @@ const API = (() => {
     getMonthlyCost, saveMonthlyCost,
     getClosureLogs, saveClosure, deleteClosure,
     getMonthSummary,
+    getMonthlyReport,
     getOwnerDashboard,
     getKitchenInit,
     getStallFormOptions,

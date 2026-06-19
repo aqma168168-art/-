@@ -98,6 +98,25 @@
             <input type="number" name="small_bowls" id="s-small" min="0" value="0" inputmode="numeric">
           </div>
         </div>
+
+        <!-- 實際收款金額 -->
+        <div class="field field--stall" style="margin-top:14px">
+          <label>
+            實際收款金額（選填）
+            <span id="theoretical-hint" style="font-size:11px;color:var(--stall-accent-dark);opacity:.7;font-weight:400">
+              （系統計算：$0）
+            </span>
+          </label>
+          <input type="number" name="actual_revenue" id="s-actual-revenue"
+                 min="0" inputmode="numeric" placeholder="若與系統計算金額不同才需要填寫"
+                 style="padding:13px 14px;font-size:18px;font-weight:700;
+                        border:2px solid var(--stall-card-border);border-radius:var(--r-lg);
+                        width:100%;font-family:var(--font-num);color:var(--ink-950);
+                        outline:none;-webkit-appearance:none;background:#FAFEFF">
+          <p style="font-size:11px;color:var(--stall-accent-dark);opacity:.7;margin-top:4px">
+            若有特價、招待、漲跌價等狀況，導致實際收到的錢跟系統算的不一樣，請填這裡
+          </p>
+        </div>
       </div>
     </div>
 
